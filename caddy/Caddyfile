@@ -1,0 +1,91 @@
+{
+	email your-email@example.com
+	servers {
+		protocols h1 h2 h3
+	}
+	grace_period 5m
+}
+
+# ---------------------------------------------------------------------
+# SNIPPETS
+# ---------------------------------------------------------------------
+
+(cloudflare_auth) {
+	tls {
+		dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+		protocols tls1.2 tls1.3
+	}
+}
+
+(security_headers) {
+	header +Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+	header +X-Content-Type-Options "nosniff"
+	header +X-Frame-Options "DENY"
+	header +X-XSS-Protection "1; mode=block"
+	header +Referrer-Policy "strict-origin-when-cross-origin"
+	header +Permissions-Policy "interest-cohort=()"
+	header -Server
+}
+
+(block_bots) {
+	@bots {
+		path *.php /wp-* /*.env /*.git* /*.xml
+	}
+	abort @bots
+}
+
+(streaming_optimization) {
+	transport http {
+		keepalive 120s
+		keepalive_idle_conns 200
+		dial_timeout 5s
+		read_timeout 5m
+		write_timeout 10m
+	}
+	flush_interval -1
+	request_buffers 0
+}
+
+# ---------------------------------------------------------------------
+# SITES
+# ---------------------------------------------------------------------
+
+https://stl.yourdomain.com {
+	import cloudflare_auth
+	import block_bots
+	import security_headers
+
+	encode gzip zstd
+
+	reverse_proxy 127.0.0.1:9944 {
+		import streaming_optimization
+		header_up Host {host}
+		header_up X-Real-IP {remote_host}
+	}
+}
+
+https://comet.yourdomain.com {
+	import cloudflare_auth
+	import block_bots
+	import security_headers
+
+	encode gzip zstd
+
+	# CometNet WebSocket route
+	handle /cometnet/ws* {
+		reverse_proxy 127.0.0.1:8765 {
+			transport http {
+				keepalive 120s
+				keepalive_idle_conns 100
+				dial_timeout 5s
+			}
+		}
+	}
+
+	# Main Comet app route
+	handle {
+		reverse_proxy 127.0.0.1:8000 {
+			import streaming_optimization
+		}
+	}
+}

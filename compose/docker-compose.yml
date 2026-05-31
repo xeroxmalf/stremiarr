@@ -1,0 +1,200 @@
+services:
+  caddy:
+    container_name: caddy
+    hostname: caddy
+    image: caddy:latest # You may want to build with Cloudflare plugin
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM caddy:builder AS builder
+        RUN xcaddy build --with github.com/caddy-dns/cloudflare
+        FROM caddy:latest
+        COPY --from=builder /usr/bin/caddy /usr/bin/caddy
+    restart: always
+    stop_grace_period: 30s
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - ../caddy/Caddyfile:/etc/caddy/Caddyfile
+      - ../caddy/data:/data
+      - ../caddy/config:/config
+    environment:
+      - CLOUDFLARE_EMAIL=${CF_EMAIL}
+      - CLOUDFLARE_API_TOKEN=${CF_API_TOKEN}
+      - ACME_AGREE=true
+    ulimits:
+      nofile:
+        soft: 1048576
+        hard: 1048576
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:2019/metrics || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  rclone:
+    image: rclone/rclone:latest
+    container_name: rclone
+    hostname: rclone
+    network_mode: host
+    shm_size: 1gb
+    restart: always
+    stop_grace_period: 30s
+    volumes:
+      - ./rclone:/config/rclone
+      - ./cache/rclone:/data/cache
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    command: [
+      "serve", "http", "real-debrid-dav:/",
+      "--addr", "127.0.0.1:9933",
+      "--cache-dir", "/data/cache",
+      "--vfs-cache-mode", "full",
+      "--vfs-cache-max-size", "250G",
+      "--vfs-cache-max-age", "72h",
+      "--vfs-read-chunk-size", "64M",
+      "--vfs-read-chunk-size-limit", "512M",
+      "--vfs-read-ahead", "512M",
+      "--buffer-size", "128M",
+      "--dir-cache-time", "10s",
+      "--vfs-fast-fingerprint",
+      "--no-checksum",
+      "--no-modtime",
+      "--transfers", "8",
+      "--checkers", "16",
+      "--low-level-retries", "10",
+      "--rc",
+      "--rc-addr", "127.0.0.1:5572",
+      "--rc-no-auth",
+      "--stats", "5s",
+      "--progress",
+      "--stats-one-line",
+      "--verbose"
+      ]
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://127.0.0.1:9933/ || exit 1
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  handoff:
+    build:
+      context: ./handoff/src
+      dockerfile: Dockerfile
+    container_name: handoff
+    hostname: handoff
+    image: handoff:latest
+    restart: always
+    stop_grace_period: 30s
+    depends_on:
+      caddy:
+        condition: service_healthy
+      rclone:
+        condition: service_healthy
+      comet:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    environment:
+      - PORT=9944
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - RD_API_KEY=${RD_API_KEY}
+      - RCLONE_URL=http://127.0.0.1:9933
+      - RCLONE_RC_URL=http://127.0.0.1:5572
+      - GOMEMLIMIT=1GiB
+      - GOGC=100
+    network_mode: host
+    volumes:
+      - ./handoff/data:/data
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://127.0.0.1:9944/health || exit 1
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  postgres:
+    image: postgres:latest
+    hostname: postgres
+    container_name: postgres
+    shm_size: 4gb
+    restart: always
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASS}
+      - POSTGRES_DB=comet
+    volumes:
+      - ../postgres:/var/lib/postgresql
+    network_mode: host
+    command: >
+      postgres
+      -c max_connections=200
+      -c shared_buffers=1GB
+      -c effective_cache_size=3GB
+      -c maintenance_work_mem=256MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d comet -h 127.0.0.1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  comet:
+    image: ghcr.io/g0ldyy/comet:latest
+    hostname: comet
+    container_name: comet
+    stop_grace_period: 60s
+    depends_on:
+      caddy:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    environment:
+      - SCRAPE_NYAA=both
+      - SCRAPE_COMET=both
+      - COMET_URL=https://comet.yourdomain.com
+      - FASTAPI_HOST=0.0.0.0
+      - FASTAPI_PORT=8000
+      - DATABASE_TYPE=postgresql
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASS}@127.0.0.1:5432/comet
+      - ADMIN_DASHBOARD_PASSWORD=${COMET_ADMIN_PASS}
+      - COMETNET_ENABLED=true
+      - BACKGROUND_SCRAPER_ENABLED=true
+    volumes:
+      - ./comet:/app/data
+    network_mode: host
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:8000/ || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
