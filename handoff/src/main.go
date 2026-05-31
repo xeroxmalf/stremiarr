@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -51,10 +52,38 @@ var (
 )
 
 var AdminPassword = os.Getenv("ADMIN_PASSWORD")
-var RdApiKey = os.Getenv("RD_API_KEY")
 var RcloneUrl = os.Getenv("RCLONE_URL")
 var RcloneAuth = os.Getenv("RCLONE_AUTH")
 var RcloneRcUrl = os.Getenv("RCLONE_RC_URL")
+
+// --- REAL-DEBRID MULTI-TOKEN POOL ---
+var rdApiKeys []string
+var rdTokenIdx uint64
+
+func initRdPool() {
+	rawKeys := os.Getenv("RD_API_KEY")
+	if rawKeys == "" {
+		log.Fatal("❌ ERROR: RD_API_KEY is missing!")
+	}
+	
+	for _, k := range strings.Split(rawKeys, ",") {
+		trimmed := strings.TrimSpace(k)
+		if trimmed != "" {
+			rdApiKeys = append(rdApiKeys, trimmed)
+		}
+	}
+
+	if len(rdApiKeys) == 0 {
+		log.Fatal("❌ ERROR: No valid Real-Debrid tokens found in RD_API_KEY!")
+	}
+
+	log.Printf("🔑 Initialized Real-Debrid token pool with %d keys", len(rdApiKeys))
+}
+
+func getRdApiKey() string {
+	idx := atomic.AddUint64(&rdTokenIdx, 1) % uint64(len(rdApiKeys))
+	return rdApiKeys[idx]
+}
 
 var startTime = time.Now()
 
@@ -218,7 +247,7 @@ func validateRDLink(targetLink string) {
 		payload := "link=" + url.QueryEscape(finalURL)
 
 		req, _ := http.NewRequest("POST", apiURL, strings.NewReader(payload))
-		req.Header.Set("Authorization", "Bearer "+RdApiKey)
+		req.Header.Set("Authorization", "Bearer "+getRdApiKey())
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 		resp, err := httpClient.Do(req)
@@ -359,13 +388,11 @@ func main() {
 	log.SetFlags(log.Ldate | log.Ltime)
 
 	initDB()
+	initRdPool()
 	initValidationPool()
 
 	if AdminPassword == "" {
 		AdminPassword = "admin"
-	}
-	if RdApiKey == "" {
-		log.Fatal("❌ ERROR: RD_API_KEY is missing!")
 	}
 	if RcloneUrl == "" {
 		log.Fatal("❌ ERROR: RCLONE_URL is missing!")
@@ -993,7 +1020,7 @@ func playHandler(w http.ResponseWriter, r *http.Request, conf Config) {
 		success := false
 		for attempt := 1; attempt <= 3; attempt++ {
 			req, _ := http.NewRequest("POST", apiURL, strings.NewReader(payload))
-			req.Header.Set("Authorization", "Bearer "+RdApiKey)
+			req.Header.Set("Authorization", "Bearer "+getRdApiKey())
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 			resp, err := httpClient.Do(req)
