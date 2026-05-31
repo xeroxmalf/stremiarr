@@ -57,8 +57,15 @@ var RcloneAuth = os.Getenv("RCLONE_AUTH")
 var RcloneRcUrl = os.Getenv("RCLONE_RC_URL")
 
 // --- REAL-DEBRID MULTI-TOKEN POOL ---
-var rdApiKeys []string
+type rdToken struct {
+	key      string
+	failed   bool
+	retryAt  time.Time
+}
+
+var rdTokenPool []*rdToken
 var rdTokenIdx uint64
+var rdPoolMu sync.RWMutex
 
 func initRdPool() {
 	rawKeys := os.Getenv("RD_API_KEY")
@@ -69,20 +76,51 @@ func initRdPool() {
 	for _, k := range strings.Split(rawKeys, ",") {
 		trimmed := strings.TrimSpace(k)
 		if trimmed != "" {
-			rdApiKeys = append(rdApiKeys, trimmed)
+			rdTokenPool = append(rdTokenPool, &rdToken{key: trimmed})
 		}
 	}
 
-	if len(rdApiKeys) == 0 {
+	if len(rdTokenPool) == 0 {
 		log.Fatal("❌ ERROR: No valid Real-Debrid tokens found in RD_API_KEY!")
 	}
 
-	log.Printf("🔑 Initialized Real-Debrid token pool with %d keys", len(rdApiKeys))
+	log.Printf("🔑 Initialized Real-Debrid token pool with %d keys", len(rdTokenPool))
 }
 
 func getRdApiKey() string {
-	idx := atomic.AddUint64(&rdTokenIdx, 1) % uint64(len(rdApiKeys))
-	return rdApiKeys[idx]
+	rdPoolMu.RLock()
+	defer rdPoolMu.RUnlock()
+
+	total := uint64(len(rdTokenPool))
+	for i := uint64(0); i < total; i++ {
+		idx := atomic.AddUint64(&rdTokenIdx, 1) % total
+		t := rdTokenPool[idx]
+		
+		if !t.failed || time.Now().After(t.retryAt) {
+			return t.key
+		}
+	}
+	
+	// Fallback to first token if all "failed"
+	return rdTokenPool[0].key
+}
+
+func markTokenFailed(key string, statusCode int) {
+	if statusCode != 401 && statusCode != 403 {
+		return
+	}
+
+	rdPoolMu.Lock()
+	defer rdPoolMu.Unlock()
+
+	for _, t := range rdTokenPool {
+		if t.key == key {
+			t.failed = true
+			t.retryAt = time.Now().Add(15 * time.Minute)
+			log.Printf("⚠️ Token [%s...] marked as FAILED (HTTP %d). Retrying in 15m.", key[:8], statusCode)
+			break
+		}
+	}
 }
 
 var startTime = time.Now()
@@ -246,8 +284,9 @@ func validateRDLink(targetLink string) {
 		apiURL := "https://api.real-debrid.com/rest/1.0/unrestrict/link"
 		payload := "link=" + url.QueryEscape(finalURL)
 
+		currentKey := getRdApiKey()
 		req, _ := http.NewRequest("POST", apiURL, strings.NewReader(payload))
-		req.Header.Set("Authorization", "Bearer "+getRdApiKey())
+		req.Header.Set("Authorization", "Bearer "+currentKey)
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 		resp, err := httpClient.Do(req)
@@ -266,6 +305,7 @@ func validateRDLink(targetLink string) {
 				}
 			} else if resp.StatusCode == 404 || resp.StatusCode == 403 {
 				resp.Body.Close()
+				markTokenFailed(currentKey, resp.StatusCode)
 				db.Exec("UPDATE stream_urls SET is_valid = 0, last_validated = ? WHERE url = ?", time.Now(), targetLink)
 				log.Printf("[Validation] 🚫 API Dead link flagged & redacted silently: %s", targetLink)
 				return
@@ -1019,8 +1059,9 @@ func playHandler(w http.ResponseWriter, r *http.Request, conf Config) {
 
 		success := false
 		for attempt := 1; attempt <= 3; attempt++ {
+			currentKey := getRdApiKey()
 			req, _ := http.NewRequest("POST", apiURL, strings.NewReader(payload))
-			req.Header.Set("Authorization", "Bearer "+getRdApiKey())
+			req.Header.Set("Authorization", "Bearer "+currentKey)
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 			resp, err := httpClient.Do(req)
@@ -1049,6 +1090,7 @@ func playHandler(w http.ResponseWriter, r *http.Request, conf Config) {
 				resp.Body.Close()
 				if resp.StatusCode == 404 || resp.StatusCode == 403 {
 					log.Printf("[Play] ❌ RD API dead link (status=%d). Marking invalid.", resp.StatusCode)
+					markTokenFailed(currentKey, resp.StatusCode)
 					recordStrike(targetLink)
 					db.Exec("UPDATE stream_urls SET is_valid = 0, last_validated = ? WHERE url = ?", time.Now(), targetLink)
 					break
