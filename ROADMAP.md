@@ -9,8 +9,8 @@ This document outlines the planned feature development and architectural improve
 - [x] **Portable Scripting**: Refactor management scripts to be project-relative and platform-agnostic.
 
 ## 🛠️ Phase 2: User Experience & Observability (Short-Term)
-- [ ] **Interactive TUI Dashboard**: A command-line dashboard for real-time stream monitoring and container status.
-- [ ] **Consolidated Logging**: Centralized log collection for all Docker services with better filtering.
+- [x] **Interactive TUI Dashboard**: A command-line dashboard for real-time stream monitoring and container status.
+- [x] **Consolidated Logging**: Centralized log collection for all Docker services with better filtering.
 - [ ] **Auto-Update System**: Optional background process to keep Docker images and Go service up-to-date.
 - [ ] **Detailed Documentation**: Add a comprehensive troubleshooting guide and performance tuning wiki.
 
