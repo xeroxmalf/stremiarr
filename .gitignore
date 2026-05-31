@@ -1,0 +1,28 @@
+# Environment secrets
+.env
+compose/.env
+
+# Local data and persistent volumes
+caddy/data/
+caddy/config/
+cache/
+handoff/data/
+postgres/
+comet/
+logs/
+
+# Snapshots and backups
+.snapshots/
+backups/
+
+# Go binaries and local builds
+handoff/src/handoff
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# OS files
+.DS_Store
+Thumbs.db
