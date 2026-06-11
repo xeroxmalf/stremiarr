@@ -1,30 +1,28 @@
-FROM golang:1.23-alpine AS builder
+FROM golang:1.24-alpine AS builder
 WORKDIR /app
 
-# Install build dependencies for CGO (required by sqlite3)
-RUN apk add --no-cache gcc musl-dev
+
+# Copy go.mod and go.sum first to leverage Docker cache for dependencies
+COPY go.mod go.sum ./
+RUN go mod download
 
 # Copy source code
-COPY main.go ui.html .
+COPY *.go ui.html .
 
-# Initialize go modules and fetch dependencies
-RUN go mod init handoff && \
-    go get github.com/mattn/go-sqlite3 && \
-    go mod tidy
-
-# Build the application with CGO enabled
-RUN CGO_ENABLED=1 GOOS=linux go build -o handoff main.go
+# Build the application statically without CGO
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg/mod \
+    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o handoff .
 
 FROM alpine:latest
 WORKDIR /app
 
-# Add tzdata (often useful for time functions in Go)
+# Add tzdata
 RUN apk add --no-cache tzdata
 
 COPY --from=builder /app/handoff .
 
-# The application uses /data for the streams.db and mappings.json, 
-# so we create a volume mount point
+# The application uses /data for the streams.db and keys.json
 VOLUME ["/data"]
 
 ENTRYPOINT ["/app/handoff"]

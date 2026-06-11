@@ -1,7 +1,8 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Handoff Admin</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -110,8 +111,12 @@
 
         .actions {
             display: flex;
+            flex-wrap: wrap;
             gap: 10px;
             margin-top: 15px;
+        }
+        .actions button {
+            flex-shrink: 0;
         }
 
         .mapping-item {
@@ -123,13 +128,63 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 10px;
         }
-        .mapping-name { color: #38bdf8; font-weight: bold; font-size: 0.9em; }
-        .mapping-url { color: #64748b; font-size: 0.8em; font-family: monospace; }
+        .mapping-name { color: #38bdf8; font-weight: bold; font-size: 0.9em; word-break: break-all; }
+        .mapping-url { color: #64748b; font-size: 0.8em; font-family: monospace; word-break: break-all; }
 
         .loading { color: #64748b; font-style: italic; }
         .error { color: #ef4444; }
         .success { color: #22c55e; }
+
+        /* ---- Responsive / Mobile ---- */
+        @media (max-width: 600px) {
+            body { padding: 12px; }
+
+            header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+                padding: 14px 0;
+            }
+
+            h1 { font-size: 1.4em; }
+            h2 { font-size: 1.1em; }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 10px;
+            }
+
+            .section { padding: 14px; }
+
+            .source-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+
+            .mapping-item {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            input[type="text"],
+            input[id="new-addon-url"],
+            input[id="new-alias"],
+            input[id="new-key"] {
+                width: 100% !important;
+                max-width: 100% !important;
+                box-sizing: border-box;
+            }
+
+            .actions {
+                flex-direction: column;
+            }
+            .actions button {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
@@ -171,8 +226,105 @@
         </div>
 
         <div class="section">
+            <h2>🔍 Discover Addons</h2>
+            <div style="display:flex; gap:15px; flex-direction:column;">
+                <div>
+                    <div class="stat-label" style="margin-bottom: 8px;">Addon Manifest URL</div>
+                    <input type="text" id="discover-url" placeholder="https://addon.strem.fun/manifest.json" style="padding: 10px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: white; width: 100%; font-family: monospace;">
+                </div>
+                <div class="actions" style="margin-top: 5px;">
+                    <button onclick="discoverAddon()">Discover &amp; Add</button>
+                    <button class="danger" id="discover-remove-btn" style="display:none;" onclick="removeDiscoveredAddon()">Remove Source</button>
+                </div>
+                <div id="discover-status" style="margin-top: 5px;"></div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🔗 Wrapper Generation</h2>
+            <div style="display: flex; gap: 15px; flex-direction: column;">
+                <div>
+                    <div class="stat-label" style="margin-bottom: 8px;">Target Addon Manifest URL</div>
+                    <input type="text" id="new-addon-url" placeholder="https://torrentio.strem.fun/manifest.json" style="padding: 10px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: white; width: 100%; font-family: monospace;">
+                </div>
+                <div>
+                    <div class="stat-label" style="margin-bottom: 8px;">Short Alias (Optional - random if empty)</div>
+                    <input type="text" id="new-alias" placeholder="e.g. torrentio" style="padding: 10px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: white; width: 100%; max-width: 300px; font-family: monospace;">
+                </div>
+                <div class="actions" style="margin-top: 5px;">
+                    <button onclick="generateWrapper()">Generate Secure Link</button>
+                </div>
+                <div id="wrapper-status" style="margin-top: 5px;"></div>
+            </div>
+        </div>
+
+        <div class="section">
             <h2>🗂️ Mappings</h2>
             <div id="mappings"></div>
+        </div>
+
+        <div class="section">
+            <h2>🔑 RD API Keys</h2>
+            <div id="api-keys"></div>
+            <div class="actions">
+                <input type="text" id="new-key" placeholder="Enter new RD API Key" style="padding: 8px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: white; width: 300px;">
+                <button onclick="addKey()">Add Key</button>
+            </div>
+            <div id="key-status" style="margin-top: 10px;"></div>
+        </div>
+
+        <div class="section" id="prefetch-section">
+            <h2>📚 Library Pre-Cache</h2>
+
+            <!-- Stremio Auth -->
+            <div id="stremio-auth-panel">
+                <div style="margin-bottom: 12px;">
+                    <div class="stat-label" style="margin-bottom: 5px;">Stremio Account</div>
+                    <div id="stremio-auth-status" class="loading">Checking...</div>
+                </div>
+                <div id="stremio-login-form" style="display:none; flex-direction:column; gap:10px;">
+                    <input type="email" id="stremio-email" placeholder="Email" style="padding: 10px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: white; width: 100%; font-family: monospace;">
+                    <input type="password" id="stremio-password" placeholder="Password" style="padding: 10px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: white; width: 100%; font-family: monospace;">
+                    <div class="actions" style="margin-top:5px;">
+                        <button onclick="stremioLogin()">Connect Stremio</button>
+                    </div>
+                </div>
+                <div id="stremio-connected-panel" style="display:none;">
+                    <div class="actions">
+                        <button class="danger" onclick="stremioLogout()">Disconnect</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Prefetch Controls -->
+            <div id="prefetch-controls" style="margin-top: 15px; display:none;">
+                <div style="margin-bottom: 10px;">
+                    <div class="stat-label" style="margin-bottom: 5px;">Item Limit (0 = all library)</div>
+                    <input type="number" id="prefetch-limit" value="0" min="0" style="width:100px; padding: 10px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: white; font-family: monospace;">
+                </div>
+                <div class="actions">
+                    <button id="prefetch-start-btn" onclick="startPrefetch()">🚀 Start Pre-Cache</button>
+                    <button class="danger" id="prefetch-stop-btn" onclick="stopPrefetch()" style="display:none;">⏹ Stop</button>
+                </div>
+            </div>
+
+            <!-- Progress -->
+            <div id="prefetch-progress" style="margin-top: 15px; display:none;">
+                <div style="margin-bottom: 8px;">
+                    <div class="stat-label">Progress</div>
+                    <div style="background:#0f172a; border-radius:4px; height:8px; margin-top:5px;">
+                        <div id="prefetch-bar" style="background:#38bdf8; height:8px; border-radius:4px; width:0%; transition:width 0.3s;"></div>
+                    </div>
+                </div>
+                <div style="display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-bottom:10px;">
+                    <div class="stat-card"><div class="stat-label">Processed</div><div class="stat-value" id="pf-processed">0</div></div>
+                    <div class="stat-card"><div class="stat-label">Total</div><div class="stat-value" id="pf-total">0</div></div>
+                    <div class="stat-card"><div class="stat-label" style="color:#22c55e;">Already Cached</div><div class="stat-value" style="color:#22c55e;" id="pf-cached">0</div></div>
+                    <div class="stat-card"><div class="stat-label" style="color:#38bdf8;">Submitted to RD</div><div class="stat-value" style="color:#38bdf8;" id="pf-submitted">0</div></div>
+                </div>
+                <div class="stat-label" style="margin-bottom:5px;">Current: <span id="pf-current" style="color:#e2e8f0;"></span></div>
+                <div style="background:#0f172a; border-radius:6px; padding:10px; max-height:200px; overflow-y:auto; font-family:monospace; font-size:0.8em;" id="pf-log"></div>
+            </div>
         </div>
 
         <div class="section">
@@ -188,37 +340,49 @@
     <script>
         const apiBase = window.location.origin;
 
-        async function loadStats() {
-            try {
-                const res = await fetch(apiBase + '/api/stats');
-                const data = await res.json();
-
-                const stats = document.getElementById('stats');
-                stats.innerHTML =
-                    '<div class="stat-card">' +
-                        '<div class="stat-label">Total Streams</div>' +
-                        '<div class="stat-value">' + data.totalStreams + '</div>' +
-                    '</div>' +
-                    '<div class="stat-card">' +
-                        '<div class="stat-label">Valid Streams</div>' +
-                        '<div class="stat-value">' + data.validStreams + '</div>' +
-                    '</div>' +
-                    '<div class="stat-card">' +
-                        '<div class="stat-label">Failed Streams</div>' +
-                        '<div class="stat-value" style="color: ' + (data.failedStreams > 100 ? '#ef4444' : '#22c55e') + '">' +
-                        data.failedStreams + '</div>' +
-                    '</div>' +
-                    '<div class="stat-card">' +
-                        '<div class="stat-label">Cached Requests</div>' +
-                        '<div class="stat-value">' + data.cachedRequests + '</div>' +
-                    '</div>' +
-                    '<div class="stat-card">' +
-                        '<div class="stat-label">Uptime</div>' +
-                        '<div class="stat-value">' + data.uptime + '</div>' +
-                    '</div>';
-            } catch (err) {
-                console.error('Failed to load stats:', err);
-            }
+        function initWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = protocol + '//' + window.location.host + '/api/ws';
+            
+            const ws = new WebSocket(wsUrl);
+            
+            ws.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                if (data.type === 'stats') {
+                    const stats = document.getElementById('stats');
+                    stats.innerHTML =
+                        '<div class="stat-card">' +
+                            '<div class="stat-label">Total Streams</div>' +
+                            '<div class="stat-value">' + data.totalStreams + '</div>' +
+                        '</div>' +
+                        '<div class="stat-card">' +
+                            '<div class="stat-label">Valid Streams</div>' +
+                            '<div class="stat-value">' + data.validStreams + '</div>' +
+                        '</div>' +
+                        '<div class="stat-card">' +
+                            '<div class="stat-label">Failed Streams</div>' +
+                            '<div class="stat-value" style="color: ' + (data.failedStreams > 100 ? '#ef4444' : '#22c55e') + '">' +
+                            data.failedStreams + '</div>' +
+                        '</div>' +
+                        '<div class="stat-card">' +
+                            '<div class="stat-label">Cached Requests</div>' +
+                            '<div class="stat-value">' + data.cachedRequests + '</div>' +
+                        '</div>' +
+                        '<div class="stat-card">' +
+                            '<div class="stat-label">Recent Validations</div>' +
+                            '<div class="stat-value">' + data.recentValidations + '</div>' +
+                        '</div>' +
+                        '<div class="stat-card">' +
+                            '<div class="stat-label">Uptime</div>' +
+                            '<div class="stat-value">' + data.uptime + '</div>' +
+                        '</div>';
+                }
+            };
+            
+            ws.onclose = function() {
+                console.log('WebSocket connection closed, reconnecting in 5s...');
+                setTimeout(initWebSocket, 5000);
+            };
         }
 
         async function loadSources() {
@@ -310,12 +474,16 @@
             status.className = 'loading';
 
             try {
-                await fetch(apiBase + '/api/clean', { method: 'POST' });
-                status.textContent = 'Cleaned failed streams';
+                const res = await fetch(apiBase + '/api/clean', { method: 'POST' });
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    throw new Error(data.error || 'HTTP ' + res.status);
+                }
+                status.textContent = '✅ Cleaned failed streams';
                 status.className = 'success';
-                await loadStats();
+                // Stats will refresh automatically via WebSocket
             } catch (err) {
-                status.textContent = 'Failed to clean streams';
+                status.textContent = 'Failed to clean streams: ' + err.message;
                 status.className = 'error';
             }
         }
@@ -326,12 +494,16 @@
             status.className = 'loading';
 
             try {
-                await fetch(apiBase + '/api/cache', { method: 'DELETE' });
-                status.textContent = 'Cache cleared';
+                const res = await fetch(apiBase + '/api/cache', { method: 'DELETE' });
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    throw new Error(data.error || 'HTTP ' + res.status);
+                }
+                status.textContent = '✅ Cache cleared';
                 status.className = 'success';
-                await loadStats();
+                // Stats will refresh automatically via WebSocket
             } catch (err) {
-                status.textContent = 'Failed to clear cache';
+                status.textContent = 'Failed to clear cache: ' + err.message;
                 status.className = 'error';
             }
         }
@@ -349,15 +521,319 @@
             }
         }
 
-        // Auto-refresh stats every 30 seconds
-        setInterval(loadStats, 30000);
+        async function generateWrapper() {
+            const urlInput = document.getElementById('new-addon-url');
+            const aliasInput = document.getElementById('new-alias');
+            const addonURL = urlInput.value.trim();
+            const alias = aliasInput.value.trim();
+
+            if (!addonURL) return;
+
+            const status = document.getElementById('wrapper-status');
+            status.textContent = 'Generating...';
+            status.className = 'loading';
+
+            try {
+                const res = await fetch(apiBase + '/api/mappings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ addon_url: addonURL, alias: alias })
+                });
+                const data = await res.json();
+                
+                if (res.ok) {
+                    status.innerHTML = '✅ Success! <br><br> Copied to clipboard: <br><input type="text" value="' + window.location.origin + '/' + data.alias + '/manifest.json" style="width:100%; padding:10px; border-radius:5px; border: 1px solid #334155; background: #0f172a; color: #38bdf8; font-family: monospace; font-size: 1.1em;" readonly onclick="this.select();">';
+                    status.className = 'success';
+                    urlInput.value = '';
+                    aliasInput.value = '';
+                    await loadMappings();
+                } else {
+                    status.textContent = data.error || 'Failed to generate wrapper';
+                    status.className = 'error';
+                }
+            } catch (err) {
+                status.textContent = 'Failed to connect to API';
+                status.className = 'error';
+            }
+        }
+
+        async function loadKeys() {
+            try {
+                const res = await fetch(apiBase + '/api/keys');
+                const data = await res.json();
+                const container = document.getElementById('api-keys');
+                if (!data.keys || data.keys.length === 0) {
+                    container.innerHTML = '<div class="loading">No keys found</div>';
+                    return;
+                }
+                container.innerHTML = data.keys.map(k => 
+                    '<div class="mapping-item">' +
+                        '<div>' +
+                            '<div class="mapping-name">' + k.token + '</div>' +
+                            '<div class="mapping-url" style="color: ' + (k.locked ? '#ef4444' : '#22c55e') + '">' + 
+                                (k.locked ? 'Locked out for ' + k.locked_secs + 's' : 'Active') + 
+                            '</div>' +
+                        '</div>' +
+                        '<button class="secondary" onclick="deleteKey(\'' + k.token + '\')">Delete</button>' +
+                    '</div>'
+                ).join('');
+            } catch (err) {
+                console.error('Failed to load keys', err);
+            }
+        }
+
+        async function addKey() {
+            const input = document.getElementById('new-key');
+            const token = input.value.trim();
+            if (!token) return;
+
+            const status = document.getElementById('key-status');
+            status.textContent = 'Adding key...';
+            status.className = 'loading';
+
+            try {
+                const res = await fetch(apiBase + '/api/keys', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token })
+                });
+                const data = await res.json();
+                status.textContent = data.message || 'Key added';
+                status.className = 'success';
+                input.value = '';
+                await loadKeys();
+            } catch (err) {
+                status.textContent = 'Failed to add key';
+                status.className = 'error';
+            }
+        }
+
+        async function deleteKey(token) {
+            if (!confirm('Delete key ' + token + '?')) return;
+            try {
+                const res = await fetch(apiBase + '/api/keys?token=' + encodeURIComponent(token), { method: 'DELETE' });
+                if (res.ok) {
+                    await loadKeys();
+                } else {
+                    alert('Cannot delete this key (it may be from ENV)');
+                }
+            } catch (err) {
+                alert('Failed to delete key');
+            }
+        }
+
+        async function discoverAddon() {
+            const urlInput = document.getElementById('discover-url');
+            const rawURL = urlInput.value.trim();
+            if (!rawURL) return;
+
+            const status = document.getElementById('discover-status');
+            const removeBtn = document.getElementById('discover-remove-btn');
+            status.textContent = 'Fetching manifest...';
+            status.className = 'loading';
+            removeBtn.style.display = 'none';
+
+            try {
+                const res = await fetch(apiBase + '/api/addons/discover', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: rawURL })
+                });
+                const data = await res.json();
+
+                if (res.ok) {
+                    status.innerHTML = '✅ Added: <strong>' + data.name + '</strong> (' + data.id + ')' +
+                        '<br><span style="color:#64748b; font-size:0.9em;">Resources: ' + (data.resources || []).join(', ') + '</span>';
+                    status.className = 'success';
+                    removeBtn.style.display = '';
+                    await loadSources();
+                } else if (res.status === 409) {
+                    status.textContent = '⚠️ ' + (data.error || 'Addon already exists as a source');
+                    status.className = 'error';
+                    removeBtn.style.display = '';
+                } else {
+                    status.textContent = '❌ ' + (data.error || 'Failed to discover addon');
+                    status.className = 'error';
+                }
+            } catch (err) {
+                status.textContent = '❌ Failed to connect to API';
+                status.className = 'error';
+            }
+        }
+
+        async function removeDiscoveredAddon() {
+            const rawURL = document.getElementById('discover-url').value.trim();
+            if (!rawURL) return;
+            if (!confirm('Remove source: ' + rawURL + '?')) return;
+
+            const status = document.getElementById('discover-status');
+            const removeBtn = document.getElementById('discover-remove-btn');
+            status.textContent = 'Removing...';
+            status.className = 'loading';
+
+            try {
+                const res = await fetch(apiBase + '/api/addons/discover?url=' + encodeURIComponent(rawURL), {
+                    method: 'DELETE'
+                });
+                const data = await res.json();
+
+                if (res.ok) {
+                    status.textContent = '✅ Source removed';
+                    status.className = 'success';
+                    removeBtn.style.display = 'none';
+                    await loadSources();
+                } else {
+                    status.textContent = '❌ ' + (data.error || 'Failed to remove source');
+                    status.className = 'error';
+                }
+            } catch (err) {
+                status.textContent = '❌ Failed to connect to API';
+                status.className = 'error';
+            }
+        }
 
         // Load all data on page load
         document.addEventListener('DOMContentLoaded', () => {
-            loadStats();
+            initWebSocket();
             loadSources();
             loadMappings();
+            loadKeys();
+            // keys refresh
+            setInterval(loadKeys, 30000);
+            // Stremio auth check
+            checkStremioAuth();
+            // Resume polling if prefetch already running
+            fetch(apiBase + '/api/prefetch').then(r => r.json()).then(data => {
+                if (data.running) {
+                    document.getElementById('prefetch-progress').style.display = '';
+                    document.getElementById('prefetch-start-btn').style.display = 'none';
+                    document.getElementById('prefetch-stop-btn').style.display = '';
+                    startPrefetchPolling();
+                }
+            }).catch(() => {});
         });
+
+        let prefetchPollInterval = null;
+
+        async function checkStremioAuth() {
+            try {
+                const res = await fetch(apiBase + '/api/stremio/auth');
+                const data = await res.json();
+                const authStatus = document.getElementById('stremio-auth-status');
+                const loginForm = document.getElementById('stremio-login-form');
+                const connectedPanel = document.getElementById('stremio-connected-panel');
+                const prefetchControls = document.getElementById('prefetch-controls');
+
+                if (data.authenticated) {
+                    authStatus.textContent = '✅ Connected (key: ' + data.auth_key_prefix + '...)';
+                    authStatus.className = 'success';
+                    loginForm.style.display = 'none';
+                    connectedPanel.style.display = '';
+                    prefetchControls.style.display = '';
+                } else {
+                    authStatus.textContent = 'Not connected — enter your Stremio credentials';
+                    authStatus.className = 'loading';
+                    loginForm.style.display = 'flex';
+                    connectedPanel.style.display = 'none';
+                    prefetchControls.style.display = 'none';
+                }
+            } catch(e) {
+                document.getElementById('stremio-auth-status').textContent = 'Error checking auth status';
+            }
+        }
+
+        async function stremioLogin() {
+            const email = document.getElementById('stremio-email').value.trim();
+            const password = document.getElementById('stremio-password').value;
+            if (!email || !password) return;
+
+            const status = document.getElementById('stremio-auth-status');
+            status.textContent = 'Logging in...';
+            status.className = 'loading';
+
+            try {
+                const res = await fetch(apiBase + '/api/stremio/auth', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({email, password})
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    document.getElementById('stremio-password').value = '';
+                    await checkStremioAuth();
+                } else {
+                    status.textContent = '❌ ' + (data.error || 'Login failed');
+                    status.className = 'error';
+                }
+            } catch(e) {
+                status.textContent = '❌ Failed to connect';
+                status.className = 'error';
+            }
+        }
+
+        async function stremioLogout() {
+            await fetch(apiBase + '/api/stremio/auth', {method: 'DELETE'});
+            await checkStremioAuth();
+        }
+
+        async function startPrefetch() {
+            const limit = parseInt(document.getElementById('prefetch-limit').value) || 0;
+            try {
+                const res = await fetch(apiBase + '/api/prefetch', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({limit})
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    document.getElementById('prefetch-start-btn').style.display = 'none';
+                    document.getElementById('prefetch-stop-btn').style.display = '';
+                    document.getElementById('prefetch-progress').style.display = '';
+                    startPrefetchPolling();
+                } else {
+                    alert(data.error || 'Failed to start');
+                }
+            } catch(e) { alert('Failed to start prefetch'); }
+        }
+
+        async function stopPrefetch() {
+            await fetch(apiBase + '/api/prefetch/stop', {method: 'POST'});
+        }
+
+        function startPrefetchPolling() {
+            if (prefetchPollInterval) clearInterval(prefetchPollInterval);
+            prefetchPollInterval = setInterval(updatePrefetchStatus, 2000);
+            updatePrefetchStatus();
+        }
+
+        async function updatePrefetchStatus() {
+            try {
+                const res = await fetch(apiBase + '/api/prefetch');
+                const data = await res.json();
+
+                const total = data.total || 1;
+                const pct = Math.round((data.processed / total) * 100);
+
+                document.getElementById('prefetch-bar').style.width = pct + '%';
+                document.getElementById('pf-processed').textContent = data.processed || 0;
+                document.getElementById('pf-total').textContent = data.total || 0;
+                document.getElementById('pf-cached').textContent = data.already_cached || 0;
+                document.getElementById('pf-submitted').textContent = data.submitted || 0;
+                document.getElementById('pf-current').textContent = data.current_item || '';
+
+                const logEl = document.getElementById('pf-log');
+                if (data.log && data.log.length) {
+                    logEl.innerHTML = data.log.slice().reverse().map(l => '<div>' + l + '</div>').join('');
+                }
+
+                if (!data.running) {
+                    clearInterval(prefetchPollInterval);
+                    prefetchPollInterval = null;
+                    document.getElementById('prefetch-start-btn').style.display = '';
+                    document.getElementById('prefetch-stop-btn').style.display = 'none';
+                }
+            } catch(e) {}
+        }
     </script>
 </body>
 </html>
