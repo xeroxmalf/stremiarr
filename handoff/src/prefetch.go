@@ -9,7 +9,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -245,7 +244,6 @@ func fetchHashesForItem(imdbID, mediaType string) map[string]int {
 			}
 
 			var hashes map[string]int = make(map[string]int)
-			re := regexp.MustCompile(`(?i)(?:👤|seeders:|s:)\s*(\d+)`)
 
 			for _, stream := range parsed.Streams {
 				title, _ := stream["title"].(string)
@@ -253,7 +251,7 @@ func fetchHashesForItem(imdbID, mediaType string) map[string]int {
 				fullText := title + "\n" + name
 				
 				seeders := 0
-				m := re.FindStringSubmatch(fullText)
+				m := seederRegex.FindStringSubmatch(fullText)
 				if len(m) > 1 {
 					seeders, _ = strconv.Atoi(m[1])
 				}

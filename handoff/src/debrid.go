@@ -80,6 +80,8 @@ func rdDo(req *http.Request) (*http.Response, error) {
 		respBodyBytes, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 
+		metricRDApiCalls.WithLabelValues(req.Method, fmt.Sprintf("%d", resp.StatusCode)).Inc()
+
 		if resp.StatusCode >= 400 {
 			// Try parsing as RD JSON error
 			var apiErr struct {

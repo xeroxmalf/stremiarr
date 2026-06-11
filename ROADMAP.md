@@ -19,7 +19,7 @@ This document outlines the planned feature development and architectural improve
 - [ ] **PostgreSQL Migration**: Move Handoff's SQLite metadata into the shared PostgreSQL instance for better concurrency.
 - [ ] **Distributed Deployment**: Support for deploying components (e.g., discovery vs. streaming) on separate machines.
 - [ ] **Plugin System**: Allow users to add custom scrapers or validation logic without modifying core code.
-- [ ] **Stream Health Metrics**: Export Prometheus-compatible metrics for Grafana visualization.
+- [x] **Stream Health Metrics**: Export Prometheus-compatible metrics for Grafana visualization.
 
 ## 🌟 Phase 4: Feature Expansion (Long-Term)
 - [x] **Web-Based Management UI**: A full-featured web dashboard for configuring aliases, sources, and monitoring health.

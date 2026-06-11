@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 	"strings"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func routeHandler(w http.ResponseWriter, r *http.Request) {
@@ -26,6 +28,11 @@ func routeHandler(w http.ResponseWriter, r *http.Request) {
 
 	if r.URL.Path == "/dashboard" || r.URL.Path == "/" || r.URL.Path == "" {
 		serveWebUI(w, r)
+		return
+	}
+
+	if r.URL.Path == "/metrics" {
+		promhttp.Handler().ServeHTTP(w, r)
 		return
 	}
 
@@ -66,6 +73,7 @@ func routeHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if strings.HasPrefix(subPath, "stream/") {
+			metricStreamsRequested.WithLabelValues(idOrConfig).Inc()
 			streamHandler(w, r, mappedConf, idOrConfig, subPath, rawQuery)
 			return
 		}
@@ -93,6 +101,7 @@ func routeHandler(w http.ResponseWriter, r *http.Request) {
 	if action == "play" {
 		playHandler(w, r, conf)
 	} else if action == "stream" {
+		metricStreamsRequested.WithLabelValues("raw_config").Inc()
 		streamHandler(w, r, conf, idOrConfig, strings.Join(parts[1:], "/"), r.URL.RawQuery)
 	} else if action == "manifest.json" {
 		manifestHandler(w, r, conf, strings.Join(parts[1:], "/"), r.URL.RawQuery)

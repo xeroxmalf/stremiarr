@@ -15,6 +15,8 @@ import (
 	"time"
 )
 
+var seederRegex = regexp.MustCompile(`(?i)(?:👤|seeders:|s:)\s*(\d+)`)
+
 func getTargetURL(addonURL, subPath, rawQuery string) string {
 	base := strings.TrimSuffix(addonURL, "/manifest.json")
 	base = strings.TrimRight(base, "/")
@@ -322,13 +324,11 @@ func serveStreamsJSON(w http.ResponseWriter, r *http.Request, body []byte, idOrC
 			}
 			return getScore(finalStreams[i]) > getScore(finalStreams[j])
 		})
-
 		result["streams"] = finalStreams
 
 		// If there were zero RD-wrapped HTTP streams but there are infoHash torrents,
 		// queue them on Real-Debrid so they'll be cached for next time.
 		if wrappedCount == 0 {
-			re := regexp.MustCompile(`(?i)(?:👤|seeders:|s:)\s*(\d+)`)
 			for _, s := range finalStreams {
 				if m, ok := s.(map[string]interface{}); ok {
 					if m["_is_infohash"] == true {
@@ -337,7 +337,7 @@ func serveStreamsJSON(w http.ResponseWriter, r *http.Request, body []byte, idOrC
 						fullText := title + "\n" + name
 						
 						seeders := 0
-						matches := re.FindStringSubmatch(fullText)
+						matches := seederRegex.FindStringSubmatch(fullText)
 						if len(matches) > 1 {
 							seeders, _ = strconv.Atoi(matches[1])
 						}

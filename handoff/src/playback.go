@@ -12,6 +12,7 @@ import (
 )
 
 func recordStrike(urlStr string) {
+	metricStreamFailures.Inc()
 	_, err := db.Exec("UPDATE stream_urls SET fail_count = fail_count + 1 WHERE url = ?", urlStr)
 	if err == nil {
 		log.Printf("[Play] ⚠️ Strike recorded for link: %s", urlStr)
@@ -157,6 +158,7 @@ func playHandler(w http.ResponseWriter, r *http.Request, conf Config) {
 
 		if waitForVFS(targetPath, 3) {
 			log.Printf("[Play] 🎯 VFS Hit! Streaming via Rclone memory buffers.")
+			metricStreamsPlayed.Inc()
 			db.Exec("UPDATE stream_urls SET success_count = success_count + 1 WHERE url = ?", targetLink)
 			targetUrl, _ := url.Parse(targetPath)
 			proxy := &httputil.ReverseProxy{
@@ -180,6 +182,7 @@ func playHandler(w http.ResponseWriter, r *http.Request, conf Config) {
 		}
 
 		log.Printf("[Play] ⚠️ VFS Miss. Engaging Direct RD Proxy.")
+		metricStreamsPlayed.Inc()
 		db.Exec("UPDATE stream_urls SET success_count = success_count + 1 WHERE url = ?", targetLink)
 		targetUrl, _ := url.Parse(finalURL)
 		proxy := &httputil.ReverseProxy{
@@ -230,7 +233,9 @@ func playHandler(w http.ResponseWriter, r *http.Request, conf Config) {
 	if filename == "" || filename == "/" {
 		log.Printf("[Play] ⏭️ Non-Debrid link or parse failure. Bypassing proxy and redirecting Stremio.")
 		recordStrike(targetLink)
-		http.Redirect(w, r, finalURL, http.StatusFound)
+		metricStreamsPlayed.Inc()
+		w.Header().Set("Location", finalURL)
+		w.WriteHeader(http.StatusFound)
 		return
 	}
 
