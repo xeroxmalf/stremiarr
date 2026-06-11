@@ -61,6 +61,8 @@ func runMigrations() {
             last_validated DATETIME
         );`,
 		`ALTER TABLE stream_urls ADD COLUMN success_count INTEGER DEFAULT 0;`,
+		`CREATE INDEX IF NOT EXISTS idx_stream_cache_updated_at ON stream_cache(updated_at);`,
+		`CREATE INDEX IF NOT EXISTS idx_stream_urls_last_validated ON stream_urls(last_validated);`,
 	}
 
 	for i, migration := range migrations {
