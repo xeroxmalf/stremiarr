@@ -12,7 +12,7 @@ The stack is orchestrated via **Docker Compose** and utilizes a "Host Networking
 
 - **Caddy (Gateway)**: A high-performance reverse proxy that handles automatic TLS (Cloudflare DNS-01), streaming-optimized buffering, and security (HSTS, rate-limiting).
 - **Rclone (The Muscle)**: Acts as the bridge between Real-Debrid and your player, featuring a **250GB VFS cache** with optimized read-ahead and chunking.
-- **Handoff (The Brain)**: A custom-built Go service that provides stream aliasing, a background validation worker pool, and a zero-stutter buffer pool for high-efficiency proxying. **Supports multiple Real-Debrid tokens with automatic round-robin load balancing.**
+- **Handoff (The Brain)**: A custom-built Go service that provides stream aliasing, a background validation worker pool, and a zero-stutter buffer pool for high-efficiency proxying. **Supports multiple Real-Debrid tokens with automatic round-robin load balancing, advanced rate-limit handling, and auto-queuing of uncached torrents (with smart seeder-count thresholds).** Also includes an optimized **Library Prefetcher** to automatically discover and cache your Stremio library on Real-Debrid.
 - **Comet & Postgres**: A multi-source scraper engine backed by a tuned PostgreSQL instance for high-concurrency metadata storage.
 
 ---

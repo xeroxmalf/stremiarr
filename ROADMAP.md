@@ -7,6 +7,7 @@ This document outlines the planned feature development and architectural improve
 - [x] **Smart Token Health-Checking**: Automatically disable expired/invalid tokens and retry them periodically.
 - [x] **Enhanced CI/CD**: Unit tests for the Go service and automated security scanning (Trivy).
 - [x] **Portable Scripting**: Refactor management scripts to be project-relative and platform-agnostic.
+- [x] **Advanced Rate Limiting**: Exponential backoff wrapper (`rdDo`) to gracefully handle Real-Debrid API 429 limits without crashing.
 
 ## 🛠️ Phase 2: User Experience & Observability (Short-Term)
 - [x] **Interactive TUI Dashboard**: A command-line dashboard for real-time stream monitoring and container status.
@@ -23,7 +24,7 @@ This document outlines the planned feature development and architectural improve
 ## 🌟 Phase 4: Feature Expansion (Long-Term)
 - [ ] **Web-Based Management UI**: A full-featured web dashboard for configuring aliases, sources, and monitoring health.
 - [ ] **Multi-Debrid Support**: Add support for AllDebrid, Premiumize, and other providers.
-- [ ] **Smart Pre-Caching**: Background worker to pre-cache popular streams based on trending data.
+- [x] **Smart Pre-Caching**: Background library prefetch worker that intelligently queues uncached streams to Real-Debrid with seeder thresholds and persistent history tracking.
 - [ ] **Transcoding Support**: Optional integration with FFmpeg/Jellyfin for on-the-fly transcoding of high-bitrate streams.
 
 ---
