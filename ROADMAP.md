@@ -26,7 +26,7 @@ This document outlines the planned feature development and architectural improve
 - [ ] **Multi-Debrid Support**: Add support for AllDebrid, Premiumize, and other providers.
 - [x] **Smart Pre-Caching**: Background library prefetch worker that intelligently queues uncached streams to Real-Debrid with seeder thresholds and persistent history tracking.
 - [x] **Plex Media Server Integration**: Support adding Real-Debrid as a native local library via Zurg and Rclone FUSE mounts.
-- [ ] **Transcoding Support**: Optional integration with FFmpeg/Jellyfin for on-the-fly transcoding of high-bitrate streams.
+- [x] **Transcoding Support**: Optional integration via Plex Media Server compose stack for on-the-fly transcoding of high-bitrate streams.
 
 ---
 
