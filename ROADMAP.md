@@ -13,7 +13,7 @@ This document outlines the planned feature development and architectural improve
 - [x] **Interactive TUI Dashboard**: A command-line dashboard for real-time stream monitoring and container status.
 - [x] **Consolidated Logging**: Centralized log collection for all Docker services with better filtering.
 - [ ] **Auto-Update System**: Optional background process to keep Docker images and Go service up-to-date.
-- [ ] **Detailed Documentation**: Add a comprehensive troubleshooting guide and performance tuning wiki.
+- [x] **Detailed Documentation**: Add a comprehensive troubleshooting guide and performance tuning wiki.
 
 ## 🏗️ Phase 3: Architectural Scaling (Medium-Term)
 - [ ] **PostgreSQL Migration**: Move Handoff's SQLite metadata into the shared PostgreSQL instance for better concurrency.
