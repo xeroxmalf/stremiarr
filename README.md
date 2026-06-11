@@ -14,6 +14,7 @@ The stack is orchestrated via **Docker Compose** and utilizes a "Host Networking
 - **Rclone (The Muscle)**: Acts as the bridge between Real-Debrid and your player, featuring a **250GB VFS cache** with optimized read-ahead and chunking.
 - **Handoff (The Brain)**: A custom-built Go service that provides stream aliasing, a background validation worker pool, and a zero-stutter buffer pool for high-efficiency proxying. **Supports multiple Real-Debrid tokens with automatic round-robin load balancing, advanced rate-limit handling, and auto-queuing of uncached torrents (with smart seeder-count thresholds).** Also includes an optimized **Library Prefetcher** to automatically discover and cache your Stremio library on Real-Debrid.
 - **Comet & Postgres**: A multi-source scraper engine backed by a tuned PostgreSQL instance for high-concurrency metadata storage.
+- **Zurg & Plex (Optional)**: Provides a native Plex Media Server integration by mounting the Real-Debrid cloud as a lightning-fast local filesystem via Zurg and an Rclone FUSE mount.
 
 ---
 
@@ -77,6 +78,8 @@ Edit `rclone/rclone.conf` with your Real-Debrid path/credentials.
 | **Rclone** | Debrid VFS Cache | 9933 |
 | **Comet** | Torrent Scraper | 8000 |
 | **Postgres** | Database | 5432 |
+| **Zurg** | Debrid WebDAV | 9999 |
+| **Plex** | Media Server | 32400 |
 
 ---
 

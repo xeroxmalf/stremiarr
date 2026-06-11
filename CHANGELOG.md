@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Robust Rate-Limiting (`rdDo`):** All Real-Debrid API calls are now routed through a hardened exponential backoff wrapper. This cleanly handles `429 Too Many Requests` API limits by pausing and automatically resuming the background queue.
 - **New API Endpoints:** Added `POST /api/rd/notify` to allow external tools (like Zurg) to push newly-cached RD torrent IDs back to Handoff.
 - **Addon Auto-Discovery:** Dynamic addon injection via `POST /api/addons/discover` without requiring hardcoded configuration updates or container restarts.
+- **Local Plex Support (Optional Stack):** Integrated an optional Zurg + Rclone FUSE mount + Plex Media Server compose stack. This allows Plex to seamlessly scan and play the Real-Debrid library managed by Handoff and Zurg.
 
 ### Changed
 - **Massive Codebase Refactor:** The massive legacy `main.go` file inside Handoff has been successfully modularized into dedicated domain packages (`debrid.go`, `proxy.go`, `api.go`, `handlers.go`, `prefetch.go`, `playback.go`, etc.) for significantly improved maintainability.
