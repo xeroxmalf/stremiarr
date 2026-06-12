@@ -76,7 +76,7 @@ func serveAPIStats(w http.ResponseWriter, r *http.Request) {
 		"uptime": "%s"
 	}`,
 		totalURLs, validURLs, failedURLs, cachedRequests, recentValidations,
-		time.Since(startTime).String(),
+		time.Since(startTime).Round(time.Second).String(),
 	)))
 }
 
@@ -291,7 +291,7 @@ func serveAPIClean(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Mark stale streams as invalid so they get re-validated
-	_, err = db.Exec("UPDATE stream_urls SET is_valid = 0 WHERE last_validated < ?", time.Now().Add(-2*time.Hour))
+	_, err = db.Exec("UPDATE stream_urls SET is_valid = FALSE WHERE last_validated < ?", time.Now().Add(-2*time.Hour))
 	if err != nil {
 		http.Error(w, "Failed to update invalid streams", http.StatusInternalServerError)
 		return

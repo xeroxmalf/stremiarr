@@ -76,7 +76,7 @@ func (h *WSHub) broadcastStats() {
 		"failedStreams":     failedURLs,
 		"cachedRequests":    cachedRequests,
 		"recentValidations": recentValidations,
-		"uptime":            time.Since(startTime).String(),
+		"uptime":            time.Since(startTime).Round(time.Second).String(),
 	}
 
 	h.mu.Lock()

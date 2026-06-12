@@ -417,6 +417,9 @@ func runPrefetchJob(ctx context.Context, authKey string, limit int) {
 		prefetchHistoryMu.Lock()
 		if prefetchHistory[item.ID] {
 			prefetchHistoryMu.Unlock()
+			prefetchStatusMu.Lock()
+			prefetchStatus.Processed++
+			prefetchStatusMu.Unlock()
 			continue
 		}
 		prefetchHistoryMu.Unlock()
