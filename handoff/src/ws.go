@@ -41,6 +41,7 @@ func (h *WSHub) addClient(conn *websocket.Conn) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.clients[conn] = true
+	activeConnections.Inc()
 }
 
 func (h *WSHub) removeClient(conn *websocket.Conn) {
@@ -48,6 +49,7 @@ func (h *WSHub) removeClient(conn *websocket.Conn) {
 	defer h.mu.Unlock()
 	delete(h.clients, conn)
 	conn.Close()
+	activeConnections.Dec()
 }
 
 func (h *WSHub) broadcastStats() {

@@ -20,6 +20,7 @@ func main() {
 	StartAnomalyWorker()
 	initRateLimiter()
 	initWebSocketHub()
+	initMetrics()
 
 	if RcloneUrl == "" {
 		log.Fatal("❌ ERROR: RCLONE_URL is missing!")

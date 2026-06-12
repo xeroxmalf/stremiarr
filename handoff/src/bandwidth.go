@@ -11,9 +11,9 @@ func TrackBandwidth(bytes int, source string) {
 	}
 	_, err := db.Exec("INSERT INTO bandwidth_log (bytes, source) VALUES (?, ?)", bytes, source)
 	if err != nil {
-		log.Printf("⚠️ Failed to log bandwidth usage: %v", err)
-		return
+		log.Printf("⚠️ Failed to log bandwidth: %v", err)
 	}
+	TrackMetrics(int64(bytes))
 	log.Printf("📈 Tracked %d bytes of bandwidth from source: %s", bytes, source)
 }
 
