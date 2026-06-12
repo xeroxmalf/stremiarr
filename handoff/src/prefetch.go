@@ -315,24 +315,14 @@ func checkRDInstantAvailability(hashes []string) (map[string]bool, error) {
 		if end > len(hashes) {
 			end = len(hashes)
 		}
-		batch := hashes[i:end]
+		chunk := hashes[i:end]
 
-		if i > 0 {
-			time.Sleep(250 * time.Millisecond) // Don't hammer RD if there are multiple batches
-		}
-
-		apiURL := "https://api.real-debrid.com/rest/1.0/torrents/instantAvailability/" + strings.Join(batch, "/")
-		req, err := http.NewRequest("GET", apiURL, nil)
+		urlStr := "https://api.real-debrid.com/rest/1.0/torrents/instantAvailability/" + strings.Join(chunk, "/")
+		req, _ := http.NewRequest("GET", urlStr, nil)
+		resp, err := rdDo(req)
 		if err != nil {
-			log.Printf("❌ [Prefetch] Failed to build instantAvailability request: %v", err)
-			continue
-		}
-		req.Header.Set("Authorization", "Bearer "+token)
-
-		resp, err := rdDo(req) // Use robust Zurg logic wrapper
-		if err != nil {
-			log.Printf("❌ [Prefetch] instantAvailability request failed: %v", err)
-			continue
+			log.Printf("⚠️ RD Availability check failed for chunk: %v", err)
+			continue // try next chunk instead of failing entirely
 		}
 
 		body, _ := io.ReadAll(resp.Body)

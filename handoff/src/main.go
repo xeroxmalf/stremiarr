@@ -18,8 +18,6 @@ func main() {
 	initValidationPool()
 	initCatalogCache()
 	StartAnomalyWorker()
-
-	go runPrefetchWorker(context.Background(), conf)
 	initRateLimiter()
 	initWebSocketHub()
 

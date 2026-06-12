@@ -65,6 +65,9 @@ func initDB() {
 			log.Fatalf("❌ Failed to open Postgres DB: %v", err)
 		}
 		isPg = true
+		conn.SetMaxOpenConns(25)
+		conn.SetMaxIdleConns(5)
+		conn.SetConnMaxLifetime(5 * time.Minute)
 		log.Printf("💾 Postgres database initialized")
 	} else {
 		os.MkdirAll("/data", 0755)
@@ -73,6 +76,7 @@ func initDB() {
 			log.Fatalf("❌ Failed to open SQLite DB: %v", err)
 		}
 		conn.Exec("PRAGMA temp_store = MEMORY;")
+		conn.SetMaxOpenConns(1) // Avoid SQLite database is locked
 		isPg = false
 		log.Printf("💾 SQLite database initialized at /data/streams.db")
 	}

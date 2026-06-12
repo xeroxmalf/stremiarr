@@ -46,6 +46,10 @@ func serveAPI(w http.ResponseWriter, r *http.Request) {
 		serveAPIPrefetchStop(w, r)
 	case path == "/api/stremio/auth":
 		serveAPIStremioAuth(w, r)
+	case path == "/auth/login":
+		handleOAuthLogin(w, r)
+	case path == "/auth/callback":
+		handleOAuthCallback(w, r)
 	default:
 		http.Error(w, "Not found", http.StatusNotFound)
 	}

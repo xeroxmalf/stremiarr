@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"sort"
 	"strconv"
@@ -140,6 +141,19 @@ func fetchAndCacheStreams(targetURL string, config Config) ([]byte, error) {
 	// Deduplicate streams
 	seenURLs := make(map[string]bool)
 	var deduped []interface{}
+	
+	// Phase 5: Compile blacklist regex once outside the loop for massive performance boost
+	blacklistPattern := os.Getenv("STREAM_BLACKLIST_REGEX")
+	var blacklistRegex *regexp.Regexp
+	if blacklistPattern != "" {
+		compiled, err := regexp.Compile("(?i)" + blacklistPattern)
+		if err == nil {
+			blacklistRegex = compiled
+		} else {
+			log.Printf("[Stream] ⚠️ Invalid STREAM_BLACKLIST_REGEX pattern: %v", err)
+		}
+	}
+
 	for _, s := range allFetcher.Streams {
 		if stream, ok := s.(map[string]interface{}); ok {
 			if urlStr, ok := stream["url"].(string); ok {
@@ -149,21 +163,20 @@ func fetchAndCacheStreams(targetURL string, config Config) ([]byte, error) {
 				}
 
 				// Blacklist filtering (Phase 5)
-				blacklistPattern := os.Getenv("STREAM_BLACKLIST_REGEX")
-				if blacklistPattern != "" {
+				if blacklistRegex != nil {
 					matched := false
 					if title, ok := stream["title"].(string); ok {
-						if match, _ := regexp.MatchString("(?i)"+blacklistPattern, title); match {
+						if blacklistRegex.MatchString(title) {
 							matched = true
 						}
 					}
 					if name, ok := stream["name"].(string); ok {
-						if match, _ := regexp.MatchString("(?i)"+blacklistPattern, name); match {
+						if blacklistRegex.MatchString(name) {
 							matched = true
 						}
 					}
 					if matched {
-						log.Printf("[Stream] 🚫 Filtered stream matching blacklist: %s", blacklistPattern)
+						log.Printf("[Stream] 🚫 Filtered stream matching blacklist")
 						continue
 					}
 				}
