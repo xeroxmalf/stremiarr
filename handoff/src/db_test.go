@@ -11,10 +11,11 @@ import (
 func TestDBInitAndMaintenance(t *testing.T) {
 	// Use an in-memory database for testing
 	var err error
-	db, err = sql.Open("sqlite", ":memory:")
+	conn, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
-		t.Fatalf("Failed to open in-memory db: %v", err)
+		t.Fatalf("Failed to open test database: %v", err)
 	}
+	db = &DBWrapper{conn: conn, isPg: false}
 	defer db.Close()
 
 	// 1. Setup tables

@@ -24,6 +24,7 @@ func main() {
 		log.Fatal("❌ ERROR: RCLONE_URL is missing!")
 	}
 
+	loadSourcesFromDisk()
 	loadMappings()
 	initAddonSources()
 

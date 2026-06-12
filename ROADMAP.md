@@ -12,18 +12,18 @@ This document outlines the planned feature development and architectural improve
 ## 🛠️ Phase 2: User Experience & Observability (Short-Term)
 - [x] **Interactive TUI Dashboard**: A command-line dashboard for real-time stream monitoring and container status.
 - [x] **Consolidated Logging**: Centralized log collection for all Docker services with better filtering.
-- [ ] **Auto-Update System**: Optional background process to keep Docker images and Go service up-to-date.
+- [x] **Auto-Update System**: Optional background process to keep Docker images and Go service up-to-date.
 - [x] **Detailed Documentation**: Add a comprehensive troubleshooting guide and performance tuning wiki.
 
 ## 🏗️ Phase 3: Architectural Scaling (Medium-Term)
-- [ ] **PostgreSQL Migration**: Move Handoff's SQLite metadata into the shared PostgreSQL instance for better concurrency.
-- [ ] **Distributed Deployment**: Support for deploying components (e.g., discovery vs. streaming) on separate machines.
-- [ ] **Plugin System**: Allow users to add custom scrapers or validation logic without modifying core code.
+- [x] **PostgreSQL Migration**: Move Handoff's SQLite metadata into the shared PostgreSQL instance for better concurrency.
+- [x] **Distributed Deployment**: Support for deploying components (e.g., discovery vs. streaming) on separate machines.
+- [x] **Plugin System**: Allow users to add custom scrapers or validation logic without modifying core code.
 - [x] **Stream Health Metrics**: Export Prometheus-compatible metrics for Grafana visualization.
 
 ## 🌟 Phase 4: Feature Expansion (Long-Term)
 - [x] **Web-Based Management UI**: A full-featured web dashboard for configuring aliases, sources, and monitoring health.
-- [ ] **Multi-Debrid Support**: Add support for AllDebrid, Premiumize, and other providers.
+- [x] **Multi-Debrid Support**: Add support for AllDebrid, Premiumize, and other providers.
 - [x] **Smart Pre-Caching**: Background library prefetch worker that intelligently queues uncached streams to Real-Debrid with seeder thresholds and persistent history tracking.
 - [x] **Plex Media Server Integration**: Support adding Real-Debrid as a native local library via Zurg and Rclone FUSE mounts.
 - [x] **Transcoding Support**: Optional integration via Plex Media Server compose stack for on-the-fly transcoding of high-bitrate streams.

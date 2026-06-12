@@ -2,34 +2,83 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"os"
 	"time"
 
+	_ "github.com/lib/pq"
 	_ "modernc.org/sqlite"
 )
 
-// --- SQLITE DB CORE ---
-var db *sql.DB
+type DBWrapper struct {
+	conn *sql.DB
+	isPg bool
+}
+
+func (w *DBWrapper) bind(query string) string {
+	if !w.isPg {
+		return query
+	}
+	var res string
+	var count int
+	for _, c := range query {
+		if c == '?' {
+			count++
+			res += fmt.Sprintf("$%d", count)
+		} else {
+			res += string(c)
+		}
+	}
+	return res
+}
+
+func (w *DBWrapper) Exec(query string, args ...interface{}) (sql.Result, error) {
+	return w.conn.Exec(w.bind(query), args...)
+}
+
+func (w *DBWrapper) QueryRow(query string, args ...interface{}) *sql.Row {
+	return w.conn.QueryRow(w.bind(query), args...)
+}
+
+func (w *DBWrapper) Query(query string, args ...interface{}) (*sql.Rows, error) {
+	return w.conn.Query(w.bind(query), args...)
+}
+
+func (w *DBWrapper) Close() error {
+	return w.conn.Close()
+}
+
+var db *DBWrapper
 
 func initDB() {
-	os.MkdirAll("/data", 0755)
+	dbType := os.Getenv("DATABASE_TYPE")
+	dbUrl := os.Getenv("DATABASE_URL")
+
+	var conn *sql.DB
 	var err error
-	// Optimized SQLite settings for higher throughput and concurrency
-	db, err = sql.Open("sqlite", "/data/streams.db?_busy_timeout=5000&_journal_mode=WAL&_sync=NORMAL&_cache_size=-20000")
-	if err != nil {
-		log.Fatalf("❌ Failed to open SQLite DB: %v", err)
+	var isPg bool
+
+	if dbType == "postgresql" {
+		conn, err = sql.Open("postgres", dbUrl)
+		if err != nil {
+			log.Fatalf("❌ Failed to open Postgres DB: %v", err)
+		}
+		isPg = true
+		log.Printf("💾 Postgres database initialized")
+	} else {
+		os.MkdirAll("/data", 0755)
+		conn, err = sql.Open("sqlite", "/data/streams.db?_busy_timeout=5000&_journal_mode=WAL&_sync=NORMAL&_cache_size=-20000")
+		if err != nil {
+			log.Fatalf("❌ Failed to open SQLite DB: %v", err)
+		}
+		conn.Exec("PRAGMA temp_store = MEMORY;")
+		isPg = false
+		log.Printf("💾 SQLite database initialized at /data/streams.db")
 	}
 
-	// Performance tuning: reduce IO by using memory for temp store
-	_, err = db.Exec("PRAGMA temp_store = MEMORY;")
-	if err != nil {
-		log.Printf("⚠️ Warning: Failed to set temp_store PRAGMA: %v", err)
-	}
-
+	db = &DBWrapper{conn: conn, isPg: isPg}
 	runMigrations()
-
-	log.Printf("💾 SQLite database initialized at /data/streams.db")
 }
 
 func runMigrations() {
@@ -56,9 +105,9 @@ func runMigrations() {
         );`,
 		`CREATE TABLE IF NOT EXISTS stream_urls (
             url TEXT PRIMARY KEY,
-            is_valid BOOLEAN DEFAULT 1,
+            is_valid BOOLEAN DEFAULT TRUE,
             fail_count INTEGER DEFAULT 0,
-            last_validated DATETIME
+            last_validated TIMESTAMP
         );`,
 		`ALTER TABLE stream_urls ADD COLUMN success_count INTEGER DEFAULT 0;`,
 		`CREATE INDEX IF NOT EXISTS idx_stream_cache_updated_at ON stream_cache(updated_at);`,

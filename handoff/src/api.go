@@ -192,6 +192,7 @@ func serveAPISourcesUpdate(w http.ResponseWriter, r *http.Request) {
 	sourcesMu.Lock()
 	addonSources = req.Sources
 	sourcesMu.Unlock()
+	saveSourcesToDisk()
 
 	w.Write([]byte(`{"status": "ok", "message": "Sources updated"}`))
 }
