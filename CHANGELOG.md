@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Postgres DB Abstraction:** Developed `DBWrapper` allowing seamless injection of standard PostgreSQL database drivers over SQLite, meeting Phase 3 roadmap constraints for high-availability setups.
+- **Dynamic Persistent Scraper Plugins:** Integrated native webhooks into `config.go` and `api.go` enabling users to instantly inject remote Stremio Addons as standalone plugins, persisted to JSON, satisfying the plugin system roadmap requirement.
 - **Smart Library Prefetcher:** A dedicated background worker (`prefetch.go`) that scans the Stremio library, aggregates hashes from all enabled addons, and selectively queues them for caching on Real-Debrid.
 - **Persistent Prefetch History:** Prefetch scans now log completed items to `data/prefetch_history.json`, allowing the scanner to instantly skip already-processed IMDB IDs across restarts.
 - **Seeder Thresholds:** The Real-Debrid auto-queue mechanism now actively parses stream metadata for seeder counts (e.g. `👤 25`). Streams with fewer than 5 seeders are automatically rejected, preventing the RD queue from clogging with dead torrents.
