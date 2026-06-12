@@ -99,10 +99,16 @@ func runMigrations() {
 
 	migrations := []string{
 		`CREATE TABLE IF NOT EXISTS stream_cache (
-            request_id TEXT PRIMARY KEY,
-            streams_json TEXT,
-            updated_at DATETIME
-        );`,
+			request_id TEXT PRIMARY KEY,
+			streams_json TEXT NOT NULL,
+			updated_at DATETIME NOT NULL
+		);
+		CREATE TABLE IF NOT EXISTS bandwidth_log (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			bytes INTEGER NOT NULL,
+			source TEXT NOT NULL,
+			timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+		);`,
 		`CREATE TABLE IF NOT EXISTS stream_urls (
             url TEXT PRIMARY KEY,
             is_valid BOOLEAN DEFAULT TRUE,

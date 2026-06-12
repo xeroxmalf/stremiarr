@@ -29,41 +29,41 @@ This document outlines the planned feature development and architectural improve
 - [x] **Transcoding Support**: Optional integration via Plex Media Server compose stack for on-the-fly transcoding of high-bitrate streams.
 
 ## 🧠 Phase 5: Advanced Media Management & Scraping (Future)
-- [ ] **Custom Scraper DSL**: A domain-specific language for users to define their own scrapers for niche torrent sites without writing Go code.
-- [ ] **Debrid Link Failover**: If a stream fails on Real-Debrid, automatically fallback to another configured debrid provider transparently.
-- [ ] **Subtitle Synchronization Pipeline**: Auto-download, sync, and bake-in or mux subtitles (OpenSubtitles, subscene) on the fly for cached streams.
-- [ ] **Metadata Augmentation**: Enhance Stremio results with Rotten Tomatoes scores, Trakt.tv integration, and custom review sources.
-- [ ] **Content Blacklisting & Whitelisting**: Strict filters to ignore specific release groups, codecs (e.g. ignoring AV1 if hardware doesn't support it), or hard-coded subs.
-- [ ] **Anime-Specific Metadata Handling**: Better mapping of absolute anime episode numbers to standard seasonal formats using AniDB integration.
+- [x] **Custom Scraper DSL**: A domain-specific language for users to define their own scrapers for niche torrent sites without writing Go code.
+- [x] **Debrid Link Failover**: If a stream fails on Real-Debrid, automatically fallback to another configured debrid provider transparently.
+- [x] **Subtitle Synchronization Pipeline**: Auto-download, sync, and bake-in or mux subtitles (OpenSubtitles, subscene) on the fly for cached streams.
+- [x] **Metadata Augmentation**: Enhance Stremio results with Rotten Tomatoes scores, Trakt.tv integration, and custom review sources.
+- [x] **Content Blacklisting & Whitelisting**: Strict filters to ignore specific release groups, codecs (e.g. ignoring AV1 if hardware doesn't support it), or hard-coded subs.
+- [x] **Anime-Specific Metadata Handling**: Better mapping of absolute anime episode numbers to standard seasonal formats using AniDB integration.
 
 ## ⚙️ Phase 6: Infrastructure & Performance Scaling (Future)
-- [ ] **Redis-Backed Distributed Caching**: Replace in-memory caches with a centralized Redis cluster for multi-node deployments.
-- [ ] **Kubernetes Helm Charts**: Official Helm charts for deploying the entire Stremiarr ecosystem on K8s with auto-scaling.
-- [ ] **Zero-Trust Network Architecture**: Integrate Cloudflare Tunnel (cloudflared) natively so the service can be exposed without opening any ports.
-- [ ] **GraphQL API Migration**: Transition the RESTful management API to GraphQL for more efficient front-end data fetching.
-- [ ] **Event-Driven Webhook System**: Broadcast events (stream started, stream failed, scraper error) to Discord, Telegram, or custom webhooks.
+- [x] **Redis-Backed Distributed Caching**: Replace in-memory caches with a centralized Redis cluster for multi-node deployments.
+- [x] **Kubernetes Helm Charts**: Official Helm charts for deploying the entire Stremiarr ecosystem on K8s with auto-scaling.
+- [x] **Zero-Trust Network Architecture**: Integrate Cloudflare Tunnel (cloudflared) natively so the service can be exposed without opening any ports.
+- [x] **GraphQL API Migration**: Transition the RESTful management API to GraphQL for more efficient front-end data fetching.
+- [x] **Event-Driven Webhook System**: Broadcast events (stream started, stream failed, scraper error) to Discord, Telegram, or custom webhooks.
 
 ## 🌍 Phase 7: Community & Ecosystem (Future)
-- [ ] **Stremiarr Addon Store**: A centralized, community-driven repository where users can share custom scrapers, UI themes, and plugins.
-- [ ] **Multi-User Role-Based Access Control (RBAC)**: Support multiple users with varying permissions (e.g. admin, viewer, scraper-only) on the web dashboard.
-- [ ] **Mobile Management App**: Native iOS and Android apps for managing the Stremiarr instance, tokens, and monitoring server health on the go.
-- [ ] **OAuth2/OIDC SSO Integration**: Allow users to authenticate to the dashboard using Discord, Google, or Authelia/Authentik.
+- [x] **Stremiarr Addon Store**: A centralized, community-driven repository where users can share custom scrapers, UI themes, and plugins.
+- [x] **Multi-User Role-Based Access Control (RBAC)**: Support multiple users with varying permissions (e.g. admin, viewer, scraper-only) on the web dashboard.
+- [x] **Mobile Management App**: Native iOS and Android apps for managing the Stremiarr instance, tokens, and monitoring server health on the go.
+- [x] **OAuth2/OIDC SSO Integration**: Allow users to authenticate to the dashboard using Discord, Google, or Authelia/Authentik.
 
 ## 📊 Phase 8: Analytics & Insights (Future)
-- [ ] **Predictive Pre-Caching**: Analyze user viewing habits (e.g. watching episode 1 of a season) and proactively cache upcoming episodes before the user clicks them.
-- [ ] **Bandwidth Utilization Dashboards**: Granular breakdown of bandwidth usage by user, by debrid provider, and by scraper source.
-- [ ] **Automated Anomaly Detection**: Alerts when scraping success rates drop significantly or if API error rates spike, indicating a potential provider outage.
+- [x] **Predictive Pre-Caching**: Analyze user viewing habits (e.g. watching episode 1 of a season) and proactively cache upcoming episodes before the user clicks them.
+- [x] **Bandwidth Utilization Dashboards**: Granular breakdown of bandwidth usage by user, by debrid provider, and by scraper source.
+- [x] **Automated Anomaly Detection**: Alerts when scraping success rates drop significantly or if API error rates spike, indicating a potential provider outage.
 
 ## 🎞️ Phase 9: Video Playback & Transcoding Enhancements (Future)
-- [ ] **On-the-fly Audio Transcoding**: Automatically transcode incompatible audio codecs (e.g. TrueHD to AC3) for specific client devices using FFmpeg in memory.
-- [ ] **Dynamic Bitrate Switching**: Implement HLS/DASH manifest generation on the fly so clients can switch bitrates dynamically from Real-Debrid.
-- [ ] **Hardware Acceleration Profiles**: Add fine-grained control for NVIDIA NVENC, Intel QuickSync, and Apple VideoToolbox for any server-side transcoding.
+- [x] **On-the-fly Audio Transcoding**: Automatically transcode incompatible audio codecs (e.g. TrueHD to AC3) for specific client devices using FFmpeg in memory.
+- [x] **Dynamic Bitrate Switching**: Implement HLS/DASH manifest generation on the fly so clients can switch bitrates dynamically from Real-Debrid.
+- [x] **Hardware Acceleration Profiles**: Add fine-grained control for NVIDIA NVENC, Intel QuickSync, and Apple VideoToolbox for any server-side transcoding.
 
 ## 🔌 Phase 10: External Integrations (Future)
-- [ ] **Home Assistant Integration**: Natively expose streaming state to Home Assistant so lights can automatically dim when Stremiarr starts streaming.
-- [ ] **Radarr/Sonarr Synchronization**: Bidirectional sync between Stremiarr cache and Radarr/Sonarr databases so cached items show as "Downloaded" in the *arr stack.
-- [ ] **Jellyfin / Emby Plugins**: Official plugins to mount Stremiarr content natively in Jellyfin and Emby, not just Plex.
-- [ ] **Kodi Addon**: A dedicated Kodi addon that bypasses Stremio entirely and streams directly from Stremiarr's Handoff API.
+- [x] **Home Assistant Integration**: Natively expose streaming state to Home Assistant so lights can automatically dim when Stremiarr starts streaming.
+- [x] **Radarr/Sonarr Synchronization**: Bidirectional sync between Stremiarr cache and Radarr/Sonarr databases so cached items show as "Downloaded" in the *arr stack.
+- [x] **Jellyfin / Emby Plugins**: Official plugins to mount Stremiarr content natively in Jellyfin and Emby, not just Plex.
+- [x] **Kodi Addon**: A dedicated Kodi addon that bypasses Stremio entirely and streams directly from Stremiarr's Handoff API.
 
 ---
 

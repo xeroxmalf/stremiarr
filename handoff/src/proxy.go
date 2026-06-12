@@ -48,6 +48,9 @@ func fetchFromSource(ctx context.Context, url string) (StreamFetcher, error) {
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
+	
+	// Track bandwidth usage
+	TrackBandwidth(len(body), url)
 
 	var result map[string]interface{}
 	if err := json.Unmarshal(body, &result); err != nil {
@@ -405,7 +408,15 @@ func serveStreamsJSON(w http.ResponseWriter, r *http.Request, body []byte, idOrC
 // --------------------------------
 
 func proxyRequest(w http.ResponseWriter, r *http.Request, addonURL string, subPath string, rawQuery string) {
-	targetURL := getTargetURL(addonURL, subPath, rawQuery)
+	// Phase 8: Predictive Pre-Caching
+	if strings.Contains(subPath, "series/tt") {
+		parts := strings.Split(strings.TrimPrefix(subPath, "series/"), ".")
+		if len(parts) > 0 {
+			PredictivePreCache(parts[0])
+		}
+	}
+
+	targetURL := getTargetURL(addonURL, subPath, r.URL.RawQuery)
 
 	if body, headers, statusCode, err := cache.GetCatalogCache(targetURL); err == nil {
 		for k, v := range headers {

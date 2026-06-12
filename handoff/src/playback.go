@@ -71,6 +71,7 @@ func playHandler(w http.ResponseWriter, r *http.Request, conf Config) {
 
 	log.Printf("[Play] 🎬 Play request intercepted: %s", targetLink)
 	FireWebhook("stream_started", "Play request started for link: "+targetLink)
+	NotifyHomeAssistant("playing", targetLink)
 
 	// Quick DB check: reject obviously dead links immediately
 	var failCount int
