@@ -16,3 +16,27 @@ func TrackBandwidth(bytes int, source string) {
 	}
 	log.Printf("📈 Tracked %d bytes of bandwidth from source: %s", bytes, source)
 }
+
+// GetBandwidthStats returns the total bandwidth consumed grouped by source.
+func GetBandwidthStats() map[string]int64 {
+	stats := make(map[string]int64)
+	if db == nil {
+		return stats
+	}
+
+	rows, err := db.Query("SELECT source, SUM(bytes) FROM bandwidth_log GROUP BY source")
+	if err != nil {
+		log.Printf("⚠️ Failed to query bandwidth stats: %v", err)
+		return stats
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var source string
+		var totalBytes int64
+		if err := rows.Scan(&source, &totalBytes); err == nil {
+			stats[source] = totalBytes
+		}
+	}
+	return stats
+}

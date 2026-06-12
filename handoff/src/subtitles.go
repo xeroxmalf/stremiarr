@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -33,10 +32,10 @@ func SyncSubtitles(imdbID string) {
 		defer resp.Body.Close()
 
 		if resp.StatusCode == 200 {
-			body, _ := io.ReadAll(resp.Body)
 			var result map[string]interface{}
-			json.Unmarshal(body, &result)
-			log.Printf("✅ Subtitles successfully downloaded for %s! They will be mapped to the file dynamically.", imdbID)
+			if err := json.NewDecoder(resp.Body).Decode(&result); err == nil {
+				log.Printf("✅ Subtitles successfully downloaded for %s! They will be mapped to the file dynamically.", imdbID)
+			}
 		} else {
 			log.Printf("⚠️ OpenSubtitles API returned HTTP %d", resp.StatusCode)
 		}

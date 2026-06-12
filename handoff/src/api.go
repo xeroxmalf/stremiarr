@@ -17,6 +17,8 @@ func serveAPI(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case path == "/api/stats":
 		RequireRole("admin", serveAPIStats)(w, r)
+	case path == "/api/bandwidth":
+		RequireRole("admin", serveAPIBandwidth)(w, r)
 	case path == "/api/ws":
 		serveWebSocket(w, r)
 	case path == "/api/keys":
@@ -76,6 +78,12 @@ func serveAPIStats(w http.ResponseWriter, r *http.Request) {
 		totalURLs, validURLs, failedURLs, cachedRequests, recentValidations,
 		time.Since(startTime).String(),
 	)))
+}
+
+func serveAPIBandwidth(w http.ResponseWriter, r *http.Request) {
+	stats := GetBandwidthStats()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(stats)
 }
 
 func serveAPIKeys(w http.ResponseWriter, r *http.Request) {

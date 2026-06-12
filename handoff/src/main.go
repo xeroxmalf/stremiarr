@@ -36,7 +36,7 @@ func main() {
 		log.Printf("🎬 Loaded saved Stremio auth key")
 	}
 
-	http.HandleFunc("/", rateLimitMiddleware(routeHandler))
+	http.HandleFunc("/", gzipMiddleware(rateLimitMiddleware(routeHandler)))
 
 	port := os.Getenv("PORT")
 	if port == "" {
