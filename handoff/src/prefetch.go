@@ -250,7 +250,7 @@ func fetchHashesForItem(imdbID, mediaType string) map[string]int {
 				name, _ := stream["name"].(string)
 				fullText := title + "\n" + name
 				
-				seeders := 0
+				seeders := -1 // Default to unknown
 				m := seederRegex.FindStringSubmatch(fullText)
 				if len(m) > 1 {
 					seeders, _ = strconv.Atoi(m[1])
@@ -483,8 +483,9 @@ func runPrefetchJob(ctx context.Context, authKey string, limit int, force bool) 
 				}
 				cachedCount++
 			} else {
-				// Only submit to RD if there are >= 5 seeders
-				if seeders < 5 {
+				// Only skip explicitly dead torrents (< 2 seeders)
+				// If seeders == -1 (unknown), we give it a shot.
+				if seeders != -1 && seeders < 2 {
 					continue
 				}
 

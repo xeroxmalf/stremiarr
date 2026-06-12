@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-var seederRegex = regexp.MustCompile(`(?i)(?:👤|seeders:|s:)\s*(\d+)`)
+var seederRegex = regexp.MustCompile(`(?i)(?:👤|seeders:|s:|s\s+|seeders\s+)\s*(\d+)`)
 
 func getTargetURL(addonURL, subPath, rawQuery string) string {
 	base := strings.TrimSuffix(addonURL, "/manifest.json")
