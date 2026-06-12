@@ -2,9 +2,11 @@ services:
   caddy:
     container_name: caddy
     hostname: caddy
-    image: caddy:latest # You may want to build with Cloudflare plugin
+    pull_policy: missing
+    image: caddy:cloudflare
     build:
       context: .
+      no_cache: true
       dockerfile_inline: |
         FROM caddy:builder AS builder
         RUN xcaddy build --with github.com/caddy-dns/cloudflare
@@ -16,13 +18,14 @@ services:
     cap_add:
       - NET_ADMIN
     volumes:
-      - ../caddy/Caddyfile:/etc/caddy/Caddyfile
-      - ../caddy/data:/data
-      - ../caddy/config:/config
+      - /docker-configs/caddy/Caddyfile:/etc/caddy/Caddyfile
+      - /docker-configs/caddy/data:/data
+      - /docker-configs/caddy/config:/config
     environment:
       - CLOUDFLARE_EMAIL=${CF_EMAIL}
       - CLOUDFLARE_API_TOKEN=${CF_API_TOKEN}
       - ACME_AGREE=true
+      - CADDY_AUTH_XM_HASH=${CADDY_AUTH_XM_HASH}
     ulimits:
       nofile:
         soft: 1048576
@@ -48,8 +51,8 @@ services:
     restart: always
     stop_grace_period: 30s
     volumes:
-      - ../rclone:/config/rclone
-      - ../cache/rclone:/data/cache
+      - /docker-configs/rclone:/config/rclone
+      - /home/stremthru_cache/rclone:/data/cache
     logging:
       driver: json-file
       options:
@@ -90,11 +93,13 @@ services:
 
   handoff:
     build:
-      context: ../handoff/src
+      context: /docker-configs/handoff/src
       dockerfile: Dockerfile
+      no_cache: true
     container_name: handoff
+    pull_policy: missing
     hostname: handoff
-    image: handoff:latest
+    image: handoff:dev
     restart: always
     stop_grace_period: 30s
     depends_on:
@@ -103,6 +108,8 @@ services:
       rclone:
         condition: service_healthy
       comet:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     logging:
       driver: json-file
@@ -113,13 +120,15 @@ services:
       - PORT=9944
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - RD_API_KEY=${RD_API_KEY}
-      - RCLONE_URL=http://127.0.0.1:9933
-      - RCLONE_RC_URL=http://127.0.0.1:5572
+      - RCLONE_URL=${RCLONE_URL}
+      - RCLONE_RC_URL=${RCLONE_RC_URL}
+      - DATABASE_TYPE=postgresql
+      - DATABASE_URL=postgres://postgres:${POSTGRES_PASS}@127.0.0.1:5432/handoff?sslmode=disable
       - GOMEMLIMIT=1GiB
       - GOGC=100
     network_mode: host
     volumes:
-      - ../handoff/data:/data
+      - /docker-configs/handoff/data:/data
     healthcheck:
       test: wget --no-verbose --tries=1 --spider http://127.0.0.1:9944/health || exit 1
       interval: 15s
@@ -128,9 +137,10 @@ services:
       start_period: 10s
 
   postgres:
-    image: postgres:latest
+    image: postgres:trixie
     hostname: postgres
     container_name: postgres
+    pull_policy: missing
     shm_size: 4gb
     restart: always
     stop_grace_period: 30s
@@ -143,17 +153,32 @@ services:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=${POSTGRES_PASS}
       - POSTGRES_DB=comet
+      - POSTGRES_MULTIPLE_DATABASES=handoff
     volumes:
-      - ../postgres:/var/lib/postgresql
+      - /docker-configs/postgres:/var/lib/postgresql
+      - ./init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh
     network_mode: host
     command: >
       postgres
       -c max_connections=200
-      -c shared_buffers=1GB
-      -c effective_cache_size=3GB
-      -c maintenance_work_mem=256MB
+      -c shared_buffers=4GB
+      -c effective_cache_size=11GB
+      -c maintenance_work_mem=1GB
       -c checkpoint_completion_target=0.9
-      -c wal_buffers=16MB
+      -c wal_buffers=64MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=300
+      -c work_mem=64MB
+      -c min_wal_size=4GB
+      -c max_wal_size=16GB
+      -c max_worker_processes=8
+      -c max_parallel_workers_per_gather=4
+      -c max_parallel_workers=8
+      -c max_parallel_maintenance_workers=4
+      -c autovacuum_vacuum_scale_factor=0.01
+      -c autovacuum_analyze_scale_factor=0.005
+      -c autovacuum_vacuum_cost_limit=3000
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d comet -h 127.0.0.1"]
       interval: 10s
@@ -165,6 +190,7 @@ services:
     image: ghcr.io/g0ldyy/comet:latest
     hostname: comet
     container_name: comet
+    pull_policy: missing
     stop_grace_period: 60s
     depends_on:
       caddy:
@@ -179,17 +205,49 @@ services:
         max-file: "5"
     environment:
       - SCRAPE_NYAA=both
+      - SCRAPE_SEADEX=both
+      - SCRAPE_NEKOBT=both
+      - SCRAPE_ZILEAN=both
       - SCRAPE_COMET=both
-      - COMET_URL=https://comet.yourdomain.com
+      - COMET_URL=https://comet.feels.legal
+      - ZILEAN_URL=https://zileanfortheweebs.midnightignite.me
+      - SCRAPE_STREMTHRU=both
+      - STREMTHRU_SCRAPE_URL=https://stremthru.13377001.xyz
+      - SCRAPE_DMM=both
+      - DMM_INGEST_ENABLED=true
+      - DMM_INGEST_CONCURRENT_WORKERS=10
+      - DMM_INGEST_INTERVAL=3600
+      - DMM_INGEST_BATCH_SIZE=1000
+      - BACKGROUND_SCRAPER_RUN_TIME_BUDGET=300
+#      - STREMTHRU_URL=https://stremthru.defnotmy.site
+      - BITMAGNET_URL=https://bitmagnetfortheweebs.midnightignite.me
+      - SCRAPE_TORRENTIO=both
+      - TORRENTIO_URL=https://torrentio.strem.fun
+      - SCRAPE_MEDIAFUSION=both
+      - MEDIAFUSION_URL=https://mediafusion.elfhosted.com
+      - SCRAPE_PEERFLIX=both
       - FASTAPI_HOST=0.0.0.0
       - FASTAPI_PORT=8000
       - DATABASE_TYPE=postgresql
       - DATABASE_URL=postgresql://postgres:${POSTGRES_PASS}@127.0.0.1:5432/comet
       - ADMIN_DASHBOARD_PASSWORD=${COMET_ADMIN_PASS}
+      - COMETNET_ADVERTISE_URL=wss://comet.defnotmy.site/cometnet/ws
+      - COMETNET_SKIP_REACHABILITY_CHECK=true
+      - COMETNET_REACHABILITY_DELAY=60
+      - COMETNET_REACHABILITY_RETRIES=10
       - COMETNET_ENABLED=true
+      - COMETNET_CONTRIBUTION_MODE=full
+      - COMETNET_GOSSIP_FANOUT=12
+      - COMETNET_UPNP_ENABLED=true
+      - EXECUTOR_MAX_WORKERS=12
+      - TORRENT_CACHE_TTL=3600
       - BACKGROUND_SCRAPER_ENABLED=true
+      - BACKGROUND_SCRAPER_MAX_MOVIES_PER_RUN=500
+      - BACKGROUND_SCRAPER_MAX_SERIES_PER_RUN=10
+      - BACKGROUND_SCRAPER_MAX_EPISODES_PER_SERIES_PER_RUN=100
+      - BACKGROUND_SCRAPER_INTERVAL=600
     volumes:
-      - ../comet:/app/data
+      - /docker-configs/comet:/app/data
     network_mode: host
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:8000/ || exit 1"]
@@ -198,62 +256,13 @@ services:
       retries: 3
       start_period: 15s
 
-
-  zurg:
-    image: ghcr.io/debridmediamanager/zurg-testing:latest
-    container_name: zurg
-    hostname: zurg
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
     restart: always
     network_mode: host
-    volumes:
-      - ../zurg/config.yml:/app/config.yml
-      - ../zurg/data:/app/data
-    healthcheck:
-      test: wget --no-verbose --tries=1 --spider http://127.0.0.1:9999/ || exit 1
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-
-  rclone-mount:
-    image: rclone/rclone:latest
-    container_name: rclone-mount
-    hostname: rclone-mount
-    network_mode: host
-    restart: always
-    cap_add:
-      - SYS_ADMIN
-    devices:
-      - /dev/fuse
-    security_opt:
-      - apparmor:unconfined
-    volumes:
-      - ../mnt/zurg:/data:shared
-    command: [
-      "mount", ":webdav:", "/data",
-      "--webdav-url", "http://127.0.0.1:9999/dav",
-      "--vfs-cache-mode", "off",
-      "--dir-cache-time", "10s",
-      "--allow-other",
-      "--read-only"
-    ]
-    depends_on:
-      zurg:
-        condition: service_healthy
-
-  plex:
-    image: lscr.io/linuxserver/plex:latest
-    container_name: plex
-    hostname: plex
-    network_mode: host
-    restart: always
+    command: tunnel run
     environment:
-      - PUID=1000
-      - PGID=1000
-      - VERSION=docker
-      - PLEX_CLAIM=${PLEX_CLAIM:-}
-    volumes:
-      - ../plex/config:/config
-      - ../mnt/zurg:/data/movies:ro
-    depends_on:
-      - rclone-mount
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+
+

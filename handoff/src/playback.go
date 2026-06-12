@@ -16,6 +16,7 @@ func recordStrike(urlStr string) {
 	_, err := db.Exec("UPDATE stream_urls SET fail_count = fail_count + 1 WHERE url = ?", urlStr)
 	if err == nil {
 		log.Printf("[Play] ⚠️ Strike recorded for link: %s", urlStr)
+		FireWebhook("stream_failed", "Stream strike recorded for link: "+urlStr)
 	}
 }
 
@@ -69,6 +70,7 @@ func playHandler(w http.ResponseWriter, r *http.Request, conf Config) {
 	}
 
 	log.Printf("[Play] 🎬 Play request intercepted: %s", targetLink)
+	FireWebhook("stream_started", "Play request started for link: "+targetLink)
 
 	// Quick DB check: reject obviously dead links immediately
 	var failCount int

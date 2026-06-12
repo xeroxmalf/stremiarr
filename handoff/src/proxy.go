@@ -144,6 +144,27 @@ func fetchAndCacheStreams(targetURL string, config Config) ([]byte, error) {
 					log.Printf("[Stream] ✂️  Pre-filter redacted suspicious URL: %s", urlStr)
 					continue
 				}
+
+				// Blacklist filtering (Phase 5)
+				blacklistPattern := os.Getenv("STREAM_BLACKLIST_REGEX")
+				if blacklistPattern != "" {
+					matched := false
+					if title, ok := stream["title"].(string); ok {
+						if match, _ := regexp.MatchString("(?i)"+blacklistPattern, title); match {
+							matched = true
+						}
+					}
+					if name, ok := stream["name"].(string); ok {
+						if match, _ := regexp.MatchString("(?i)"+blacklistPattern, name); match {
+							matched = true
+						}
+					}
+					if matched {
+						log.Printf("[Stream] 🚫 Filtered stream matching blacklist: %s", blacklistPattern)
+						continue
+					}
+				}
+
 				if !seenURLs[urlStr] {
 					seenURLs[urlStr] = true
 					deduped = append(deduped, stream)
@@ -176,6 +197,7 @@ func fetchAndCacheStreams(targetURL string, config Config) ([]byte, error) {
 	cache.SetStreamCache(targetURL, string(body), 7*24*time.Hour)
 
 	log.Printf("[Stream] ✅ Fetched %d streams from %d sources", len(deduped), len(sources))
+	FireWebhook("streams_fetched", fmt.Sprintf("Fetched %d streams for target %s", len(deduped), targetURL))
 	return body, nil
 }
 

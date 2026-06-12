@@ -1,0 +1,4 @@
+apiVersion: v2
+name: stremiarr
+description: Helm chart for Stremiarr Ecosystem
+version: 0.1.0

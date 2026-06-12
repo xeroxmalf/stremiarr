@@ -83,16 +83,16 @@ func initDB() {
 
 func runMigrations() {
 	_, err := db.Exec(`
-		CREATE TABLE IF NOT EXISTS schema_migrations (
+		CREATE TABLE IF NOT EXISTS handoff_migrations (
 			version INTEGER PRIMARY KEY
 		);
 	`)
 	if err != nil {
-		log.Fatalf("❌ Failed to init schema_migrations: %v", err)
+		log.Fatalf("❌ Failed to init handoff_migrations: %v", err)
 	}
 
 	var currentVersion int
-	err = db.QueryRow("SELECT COALESCE(MAX(version), 0) FROM schema_migrations").Scan(&currentVersion)
+	err = db.QueryRow("SELECT COALESCE(MAX(version), 0) FROM handoff_migrations").Scan(&currentVersion)
 	if err != nil {
 		log.Fatalf("❌ Failed to query current schema version: %v", err)
 	}
@@ -121,12 +121,10 @@ func runMigrations() {
 			if err != nil {
 				log.Printf("⚠️ Migration %d warning (might already exist): %v", version, err)
 			}
-			db.Exec("INSERT INTO schema_migrations (version) VALUES (?)", version)
+			db.Exec("INSERT INTO handoff_migrations (version) VALUES (?)", version)
 			log.Printf("🔄 Applied DB migration v%d", version)
 		}
 	}
-
-	log.Printf("💾 SQLite database initialized at /data/streams.db")
 }
 
 func initDBMaintenance() {

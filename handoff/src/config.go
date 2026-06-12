@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"net/http"
 	"os"
 	"sync"
@@ -31,25 +30,6 @@ var (
 	}
 	sourcesMu sync.Mutex
 )
-
-func loadSourcesFromDisk() {
-	sourcesMu.Lock()
-	defer sourcesMu.Unlock()
-	b, err := os.ReadFile("/data/sources.json")
-	if err == nil {
-		var sources []AddonSource
-		if json.Unmarshal(b, &sources) == nil && len(sources) > 0 {
-			addonSources = sources
-		}
-	}
-}
-
-func saveSourcesToDisk() {
-	sourcesMu.Lock()
-	defer sourcesMu.Unlock()
-	b, _ := json.Marshal(addonSources)
-	os.WriteFile("/data/sources.json", b, 0644)
-}
 
 var RcloneUrl = os.Getenv("RCLONE_URL")
 var RcloneAuth = os.Getenv("RCLONE_AUTH")
