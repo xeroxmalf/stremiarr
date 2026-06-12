@@ -302,6 +302,10 @@
                     <div class="stat-label" style="margin-bottom: 5px;">Item Limit (0 = all library)</div>
                     <input type="number" id="prefetch-limit" value="0" min="0" style="width:100px; padding: 10px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: white; font-family: monospace;">
                 </div>
+                <div style="margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
+                    <input type="checkbox" id="prefetch-force" style="width:16px; height:16px;">
+                    <label for="prefetch-force" class="stat-label" style="margin:0;">Force Full Rescan (ignores history)</label>
+                </div>
                 <div class="actions">
                     <button id="prefetch-start-btn" onclick="startPrefetch()">🚀 Start Pre-Cache</button>
                     <button class="danger" id="prefetch-stop-btn" onclick="stopPrefetch()" style="display:none;">⏹ Stop</button>
@@ -778,11 +782,12 @@
 
         async function startPrefetch() {
             const limit = parseInt(document.getElementById('prefetch-limit').value) || 0;
+            const force = document.getElementById('prefetch-force').checked;
             try {
                 const res = await fetch(apiBase + '/api/prefetch', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({limit})
+                    body: JSON.stringify({limit, force})
                 });
                 const data = await res.json();
                 if (res.ok) {

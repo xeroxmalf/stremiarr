@@ -394,7 +394,8 @@ func serveAPIPrefetch(w http.ResponseWriter, r *http.Request) {
 
 	case "POST":
 		var req struct {
-			Limit int `json:"limit"`
+			Limit int  `json:"limit"`
+			Force bool `json:"force"`
 		}
 		json.NewDecoder(r.Body).Decode(&req)
 
@@ -434,7 +435,7 @@ func serveAPIPrefetch(w http.ResponseWriter, r *http.Request) {
 		}
 		prefetchStatusMu.Unlock()
 
-		go runPrefetchJob(ctx, authKey, req.Limit)
+		go runPrefetchJob(ctx, authKey, req.Limit, req.Force)
 		w.Write([]byte(`{"status":"started"}`))
 
 	default:

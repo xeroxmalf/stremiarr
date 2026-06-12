@@ -369,7 +369,7 @@ func addPrefetchLog(msg string) {
 }
 
 // runPrefetchJob is the main goroutine that processes the library.
-func runPrefetchJob(ctx context.Context, authKey string, limit int) {
+func runPrefetchJob(ctx context.Context, authKey string, limit int, force bool) {
 	defer func() {
 		prefetchStatusMu.Lock()
 		prefetchStatus.Running = false
@@ -380,7 +380,16 @@ func runPrefetchJob(ctx context.Context, authKey string, limit int) {
 	addPrefetchLog("🎬 Fetching Stremio library...")
 	log.Printf("🎬 [Prefetch] Starting prefetch job")
 
-	loadPrefetchHistory()
+	if force {
+		addPrefetchLog("⚠️ Force mode enabled: wiping prefetch history")
+		log.Printf("⚠️ [Prefetch] Wiping prefetch history for full rescan")
+		prefetchHistoryMu.Lock()
+		prefetchHistory = make(map[string]bool)
+		prefetchHistoryMu.Unlock()
+		savePrefetchHistory()
+	} else {
+		loadPrefetchHistory()
+	}
 
 	library, err := fetchStremioLibrary(authKey)
 	if err != nil {
