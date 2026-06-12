@@ -16,21 +16,28 @@ func serveAPI(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 	switch {
 	case path == "/api/stats":
-		serveAPIStats(w, r)
+		RequireRole("admin", serveAPIStats)(w, r)
 	case path == "/api/ws":
 		serveWebSocket(w, r)
 	case path == "/api/keys":
-		serveAPIKeys(w, r)
+		RequireRole("admin", serveAPIKeys)(w, r)
 	case path == "/api/sources" && r.Method == "GET":
-		serveAPISourcesGet(w, r)
+		RequireRole("admin", serveAPISourcesGet)(w, r)
 	case path == "/api/sources" && r.Method == "PUT":
-		serveAPISourcesUpdate(w, r)
+		RequireRole("admin", serveAPISourcesUpdate)(w, r)
 	case path == "/api/mappings":
-		serveAPIMappings(w, r)
+		RequireRole("admin", serveAPIMappings)(w, r)
 	case path == "/api/clean":
-		serveAPIClean(w, r)
+		RequireRole("admin", serveAPIClean)(w, r)
 	case path == "/api/cache":
 		serveAPICache(w, r)
+	case path == "/transcode":
+		streamURL := r.URL.Query().Get("stream")
+		if streamURL != "" {
+			TranscodeAudio(w, r, streamURL)
+		} else {
+			http.Error(w, "Missing stream URL", http.StatusBadRequest)
+		}
 	case strings.HasPrefix(path, "/api/addons"):
 		serveAPIAddons(w, r)
 	case path == "/api/prefetch":

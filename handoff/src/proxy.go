@@ -408,17 +408,22 @@ func serveStreamsJSON(w http.ResponseWriter, r *http.Request, body []byte, idOrC
 // --------------------------------
 
 func proxyRequest(w http.ResponseWriter, r *http.Request, addonURL string, subPath string, rawQuery string) {
-	// Phase 8: Predictive Pre-Caching
-	if strings.Contains(subPath, "series/tt") {
-		parts := strings.Split(strings.TrimPrefix(subPath, "series/"), ".")
+	if strings.Contains(subPath, "series/tt") || strings.Contains(subPath, "movie/tt") {
+		parts := strings.Split(strings.TrimPrefix(strings.TrimPrefix(subPath, "series/"), "movie/"), ".")
 		if len(parts) > 0 {
-			PredictivePreCache(parts[0])
+			if strings.Contains(subPath, "series/tt") {
+				PredictivePreCache(parts[0])
+			}
+			SyncSubtitles(strings.Split(parts[0], ":")[0]) // pass imdbID
 		}
 	}
 
 	targetURL := getTargetURL(addonURL, subPath, r.URL.RawQuery)
 
 	if body, headers, statusCode, err := cache.GetCatalogCache(targetURL); err == nil {
+		if strings.Contains(subPath, "meta/") {
+			body = AugmentMetadata(body)
+		}
 		for k, v := range headers {
 			w.Header()[k] = v
 		}
@@ -441,6 +446,10 @@ func proxyRequest(w http.ResponseWriter, r *http.Request, addonURL string, subPa
 	body, _ := io.ReadAll(resp.Body)
 
 	cache.SetCatalogCache(targetURL, body, resp.Header.Clone(), resp.StatusCode, 5*time.Minute)
+
+	if strings.Contains(subPath, "meta/") {
+		body = AugmentMetadata(body)
+	}
 
 	for k, v := range resp.Header {
 		w.Header()[k] = v

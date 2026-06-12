@@ -492,9 +492,12 @@ func runPrefetchJob(ctx context.Context, authKey string, limit int) {
 				}
 
 				// Not cached — submit to RD
-				time.Sleep(500 * time.Millisecond)
-				err := rdAddMagnet(hash)
-				if err != nil {
+				time.Sleep(1 * time.Second)
+				err := rdAddMagnet("magnet:?xt=urn:btih:" + hash)
+				if err == nil {
+					addPrefetchLog(fmt.Sprintf("🚀 Successfully queued %s to Debrid", hash))
+					SyncArrStack("/links/" + hash) // Notify Radarr/Sonarr
+				} else {
 					if strings.Contains(err.Error(), "451") {
 						continue // Infringing file, silently skip
 					}

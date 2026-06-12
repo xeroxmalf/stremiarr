@@ -17,8 +17,11 @@ func main() {
 	initDebridPools()
 	initValidationPool()
 	initCatalogCache()
-	initWebSocketHub()
+	StartAnomalyWorker()
+
+	go runPrefetchWorker(context.Background(), conf)
 	initRateLimiter()
+	initWebSocketHub()
 
 	if RcloneUrl == "" {
 		log.Fatal("❌ ERROR: RCLONE_URL is missing!")
