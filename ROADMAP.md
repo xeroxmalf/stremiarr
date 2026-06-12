@@ -58,6 +58,31 @@ This document outlines the planned feature development and architectural improve
 - [ ] **Bandwidth Utilization Dashboards**: Granular breakdown of bandwidth usage by user, by debrid provider, and by scraper source.
 - [ ] **Automated Anomaly Detection**: Alerts when scraping success rates drop significantly or if API error rates spike, indicating a potential provider outage.
 
+## 🎞️ Phase 9: Video Playback & Transcoding Enhancements (Future)
+- [ ] **On-the-fly Audio Transcoding**: Automatically transcode incompatible audio codecs (e.g. TrueHD to AC3) for specific client devices using FFmpeg in memory.
+- [ ] **Dynamic Bitrate Switching**: Implement HLS/DASH manifest generation on the fly so clients can switch bitrates dynamically from Real-Debrid.
+- [ ] **Hardware Acceleration Profiles**: Add fine-grained control for NVIDIA NVENC, Intel QuickSync, and Apple VideoToolbox for any server-side transcoding.
+
+## 🛡️ Phase 10: Security & Compliance (Future)
+- [ ] **Automated DMCA/Copyright Scrubbing**: Option to auto-purge specific hashes from the cache if requested, for users running public instances.
+- [ ] **Advanced Abuse Protection**: Rate limit and IP ban users scraping the Stremiarr instance too aggressively using fail2ban integration.
+- [ ] **End-to-End Encryption for Streams**: Wrap streams in HTTPS dynamically to prevent ISP throttling and deep packet inspection of the video data.
+
+## 🤖 Phase 11: Machine Learning & NLP (Future)
+- [ ] **Semantic Search for Content**: Use a localized vector database to find movies/shows based on plot descriptions and themes.
+- [ ] **Automated Quality Scoring**: Use ML to analyze the bitrate, resolution, and audio channels of available torrents and rank them intelligently instead of just by file size.
+- [ ] **LLM-Based Troubleshooting Assistant**: Integrate a local, lightweight LLM into the TUI to answer user configuration questions based on the documentation.
+
+## 🔌 Phase 12: External Integrations (Future)
+- [ ] **Home Assistant Integration**: Natively expose streaming state to Home Assistant so lights can automatically dim when Stremiarr starts streaming.
+- [ ] **Radarr/Sonarr Synchronization**: Bidirectional sync between Stremiarr cache and Radarr/Sonarr databases so cached items show as "Downloaded" in the *arr stack.
+- [ ] **Jellyfin / Emby Plugins**: Official plugins to mount Stremiarr content natively in Jellyfin and Emby, not just Plex.
+- [ ] **Kodi Addon**: A dedicated Kodi addon that bypasses Stremio entirely and streams directly from Stremiarr's Handoff API.
+
+## 🌐 Phase 13: Decentralization & Web3 (Future)
+- [ ] **IPFS Content Hashing**: Store and distribute Stremiarr config and plugin artifacts over IPFS for uncensorable updates.
+- [ ] **Tor/I2P Hidden Service Support**: Allow Stremiarr to be deployed natively as a hidden service for maximum privacy.
+
 ---
 
 ## 📈 Contribution
