@@ -1,0 +1,4 @@
+zurg: v1
+token: YOUR_RD_API_TOKEN
+host: "[::]"
+port: 9999
