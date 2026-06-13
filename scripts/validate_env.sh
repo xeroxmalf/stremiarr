@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT="${1:-/docker-configs}"
+PROJECT="${1:-.}"
 COMPOSE="$PROJECT/compose/docker-compose.yml"
 ENVFILE="$PROJECT/compose/.env"
 

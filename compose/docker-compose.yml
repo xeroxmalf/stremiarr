@@ -18,9 +18,9 @@ services:
     cap_add:
       - NET_ADMIN
     volumes:
-      - /docker-configs/caddy/Caddyfile:/etc/caddy/Caddyfile
-      - /docker-configs/caddy/data:/data
-      - /docker-configs/caddy/config:/config
+      - ../caddy/Caddyfile:/etc/caddy/Caddyfile
+      - ../caddy/data:/data
+      - ../caddy/config:/config
     environment:
       - CLOUDFLARE_EMAIL=${CF_EMAIL}
       - CLOUDFLARE_API_TOKEN=${CF_API_TOKEN}
@@ -51,8 +51,8 @@ services:
     restart: always
     stop_grace_period: 30s
     volumes:
-      - /docker-configs/rclone:/config/rclone
-      - /home/stremthru_cache/rclone:/data/cache
+      - ../rclone:/config/rclone
+      - ../rclone/cache:/data/cache
     logging:
       driver: json-file
       options:
@@ -93,7 +93,7 @@ services:
 
   handoff:
     build:
-      context: /docker-configs/handoff/src
+      context: ../handoff/src
       dockerfile: Dockerfile
       no_cache: true
     container_name: handoff
@@ -128,7 +128,7 @@ services:
       - GOGC=100
     network_mode: host
     volumes:
-      - /docker-configs/handoff/data:/data
+      - ../handoff/data:/data
     healthcheck:
       test: wget --no-verbose --tries=1 --spider http://127.0.0.1:9944/health || exit 1
       interval: 15s
@@ -155,7 +155,7 @@ services:
       - POSTGRES_DB=comet
       - POSTGRES_MULTIPLE_DATABASES=handoff
     volumes:
-      - /docker-configs/postgres:/var/lib/postgresql
+      - ../postgres:/var/lib/postgresql
       - ./init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh
     network_mode: host
     command: >
@@ -247,7 +247,7 @@ services:
       - BACKGROUND_SCRAPER_MAX_EPISODES_PER_SERIES_PER_RUN=100
       - BACKGROUND_SCRAPER_INTERVAL=600
     volumes:
-      - /docker-configs/comet:/app/data
+      - ../comet:/app/data
     network_mode: host
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:8000/ || exit 1"]
