@@ -145,7 +145,7 @@ func playHandler(w http.ResponseWriter, r *http.Request, conf Config) {
 		if size > 0 && size < 20000000 {
 			log.Printf("[Play] ❌ RD Error Video caught at playback (%d bytes)! Striking and rejecting.", size)
 			// Mark as invalid in DB
-			db.Exec("UPDATE stream_urls SET is_valid = 0, last_validated = ? WHERE url = ?", time.Now(), targetLink)
+			db.Exec("UPDATE stream_urls SET is_valid = FALSE, last_validated = ? WHERE url = ?", time.Now(), targetLink)
 			recordStrike(targetLink)
 			http.Error(w, "File blocked by Real-Debrid", http.StatusNotFound)
 			return

@@ -195,7 +195,7 @@ func fetchAndCacheStreams(targetURL string, config Config) ([]byte, error) {
 	for _, s := range deduped {
 		if stream, ok := s.(map[string]interface{}); ok {
 			if urlStr, ok := stream["url"].(string); ok && urlStr != "" {
-				db.Exec("INSERT INTO stream_urls (url, is_valid, fail_count) VALUES (?, 1, 0) ON CONFLICT(url) DO NOTHING", urlStr)
+				db.Exec("INSERT INTO stream_urls (url, is_valid, fail_count) VALUES (?, TRUE, 0) ON CONFLICT(url) DO NOTHING", urlStr)
 				select {
 				case validateCh <- urlStr:
 				default:

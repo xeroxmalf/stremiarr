@@ -64,7 +64,7 @@ func (h *WSHub) broadcastStats() {
 	var cachedRequests, recentValidations int
 
 	db.QueryRow("SELECT COUNT(*) FROM stream_urls").Scan(&totalURLs)
-	db.QueryRow("SELECT COUNT(*) FROM stream_urls WHERE is_valid = 1").Scan(&validURLs)
+	db.QueryRow("SELECT COUNT(*) FROM stream_urls WHERE is_valid = TRUE").Scan(&validURLs)
 	db.QueryRow("SELECT COUNT(*) FROM stream_urls WHERE fail_count > 0").Scan(&failedURLs)
 	db.QueryRow("SELECT COUNT(*) FROM stream_cache").Scan(&cachedRequests)
 	db.QueryRow("SELECT COUNT(*) FROM stream_urls WHERE last_validated > ?", time.Now().Add(-10*time.Minute)).Scan(&recentValidations)

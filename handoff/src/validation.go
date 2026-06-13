@@ -73,7 +73,7 @@ func validateRDLink(targetLink string) {
 		resp, err := client.Do(req)
 
 		if err != nil {
-			db.Exec("UPDATE stream_urls SET is_valid = 0, last_validated = ? WHERE url = ?", time.Now(), targetLink)
+			db.Exec("UPDATE stream_urls SET is_valid = FALSE, last_validated = ? WHERE url = ?", time.Now(), targetLink)
 			return
 		}
 		resp.Body.Close()
@@ -99,7 +99,7 @@ func validateRDLink(targetLink string) {
 		if err == nil && dl != "" {
 			downloadURL = dl
 		} else {
-			db.Exec("UPDATE stream_urls SET is_valid = 0, last_validated = ? WHERE url = ?", time.Now(), targetLink)
+			db.Exec("UPDATE stream_urls SET is_valid = FALSE, last_validated = ? WHERE url = ?", time.Now(), targetLink)
 			return
 		}
 	}
@@ -113,19 +113,19 @@ func validateRDLink(targetLink string) {
 		// 🛑 RD "Provider Unavailable" Video Size Check
 		if size > 0 && size < 25000000 {
 			log.Printf("[Validation] 🚫 RD Error Video detected (%d bytes). Redacting: %s", size, targetLink)
-			db.Exec("UPDATE stream_urls SET is_valid = 0, last_validated = ? WHERE url = ?", time.Now(), targetLink)
+			db.Exec("UPDATE stream_urls SET is_valid = FALSE, last_validated = ? WHERE url = ?", time.Now(), targetLink)
 			return
 		} else if size > 0 {
 			log.Printf("[Validation] ✅ Range probe successful (%d bytes) for: %s", size, targetLink)
-			db.Exec("UPDATE stream_urls SET is_valid = 1, last_validated = ? WHERE url = ?", time.Now(), targetLink)
+			db.Exec("UPDATE stream_urls SET is_valid = TRUE, last_validated = ? WHERE url = ?", time.Now(), targetLink)
 			return
 		} else {
-			db.Exec("UPDATE stream_urls SET is_valid = 0, last_validated = ? WHERE url = ?", time.Now(), targetLink)
+			db.Exec("UPDATE stream_urls SET is_valid = FALSE, last_validated = ? WHERE url = ?", time.Now(), targetLink)
 			log.Printf("[Validation] 🚫 Range probe failed & redacted silently: %s", targetLink)
 			return
 		}
 	}
 
 	log.Printf("[Validation] ✅ Validation complete and successful for: %s", targetLink)
-	db.Exec("UPDATE stream_urls SET is_valid = 1, last_validated = ? WHERE url = ?", time.Now(), targetLink)
+	db.Exec("UPDATE stream_urls SET is_valid = TRUE, last_validated = ? WHERE url = ?", time.Now(), targetLink)
 }
