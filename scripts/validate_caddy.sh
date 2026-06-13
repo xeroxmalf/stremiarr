@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
+PROJECT="${1:-/docker-configs}"
 CADDYFILE="$PROJECT/caddy/Caddyfile"
 
 if [ ! -f "$CADDYFILE" ]; then
@@ -22,9 +22,9 @@ if [ "$OPEN" -ne "$CLOSE" ]; then
 fi
 
 # 2) Ensure we have key site blocks
-for site in "stl\.defnotmy\.site" "llama\.defnotmy\.site" "comet\.defnotmy\.site"; do
-  if ! grep -qE "https?://$site" "$CADDYFILE"; then
-    fail "Missing site block for $site"
+for prefix in "stl" "comet"; do
+  if ! grep -qE "https?://$prefix\.[a-z0-9.-]+" "$CADDYFILE"; then
+    fail "Missing site block for $prefix"
   fi
 done
 
@@ -34,11 +34,11 @@ if ! grep -qi "cloudflare" "$CADDYFILE"; then
 fi
 
 # 4) Ensure reverse_proxy directives exist for known sites
-for site in "stl\.defnotmy\.site" "llama\.defnotmy\.site" "comet\.defnotmy\.site"; do
+for prefix in "stl" "comet"; do
   # Extract the site block and check for reverse_proxy
-  block=$(awk "/https?:\/\/$site/,/^[}]/" "$CADDYFILE")
+  block=$(awk "/https?:\/\/$prefix\.[a-z0-9.-]+/,/^[}]/" "$CADDYFILE")
   if ! echo "$block" | grep -qE "reverse_proxy"; then
-    fail "No reverse_proxy found for $site"
+    fail "No reverse_proxy found for $prefix"
   fi
 done
 
@@ -61,10 +61,10 @@ while IFS= read -r line; do
 done < <(grep -E "reverse_proxy" "$CADDYFILE" | grep -v "^#")
 
 # 6) Ensure we have streaming optimization imported in stl/comet
-for site in "stl\.defnotmy\.site" "comet\.defnotmy\.site"; do
-  block=$(awk "/https?:\/\/$site/,/^[}]/" "$CADDYFILE")
+for prefix in "stl" "comet"; do
+  block=$(awk "/https?:\/\/$prefix\.[a-z0-9.-]+/,/^[}]/" "$CADDYFILE")
   if ! echo "$block" | grep -qE "import streaming_optimization|keepalive|flush_interval"; then
-    echo "WARN: Streaming optimization not clearly applied to $site"
+    echo "WARN: Streaming optimization not clearly applied to $prefix"
   fi
 done
 

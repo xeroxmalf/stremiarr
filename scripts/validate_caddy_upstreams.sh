@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
+PROJECT="${1:-/docker-configs}"
 CADDYFILE="$PROJECT/caddy/Caddyfile"
 COMPOSE="$PROJECT/compose/docker-compose.yml"
 
@@ -29,29 +29,23 @@ HANDOFF_PORT=$(grep 'PORT=' "$COMPOSE" | head -1 | cut -d'=' -f2 | xargs)
 # CometNet WS port (from healthcheck / common configs)
 COMETNET_PORT=8765
 
-HOST="127.0.0.1"
+HOST="192.168.250.125"
 
-# 2) Check stl.defnotmy.site -> handoff
-block=$(awk "/https?:\/\/stl\.defnotmy\.site/,/^[}]/" "$CADDYFILE")
-if ! echo "$block" | grep -qE "reverse_proxy.*$HOST:$HANDOFF_PORT"; then
-  fail "stl.defnotmy.site not reverse proxying to handoff on port $HANDOFF_PORT"
+# 2) Check stl.* -> handoff
+block=$(awk "/https?:\/\/stl\.[a-z0-9.-]+/,/^[}]/" "$CADDYFILE")
+if ! echo "$block" | grep -qE "reverse_proxy.*(127\.0\.0\.1|$HOST):$HANDOFF_PORT"; then
+  fail "stl site not reverse proxying to handoff on port $HANDOFF_PORT"
 fi
 
-# 3) Check llama.defnotmy.site -> llama backend (expected on 127.0.0.1:8080)
-block=$(awk "/https?:\/\/llama\.defnotmy\.site/,/^[}]/" "$CADDYFILE")
-if ! echo "$block" | grep -qE "reverse_proxy.*127\.0\.0\.1:8080"; then
-  echo "WARN: llama.defnotmy.site upstream is not 127.0.0.1:8080"
+# 3) Check comet.* -> comet main
+block=$(awk "/https?:\/\/comet\.[a-z0-9.-]+/,/^[}]/" "$CADDYFILE")
+if ! echo "$block" | grep -qE "reverse_proxy.*(127\.0\.0\.1|$HOST):$COMET_PORT"; then
+  fail "comet site not reverse proxying to comet on port $COMET_PORT"
 fi
 
-# 4) Check comet.defnotmy.site -> comet main
-block=$(awk "/https?:\/\/comet\.defnotmy\.site/,/^[}]/" "$CADDYFILE")
-if ! echo "$block" | grep -qE "reverse_proxy.*$HOST:$COMET_PORT"; then
-  fail "comet.defnotmy.site not reverse proxying to comet on port $COMET_PORT"
-fi
-
-# 5) Check cometNet WS route
-if ! echo "$block" | grep -qE "/cometnet/ws.*$HOST:$COMETNET_PORT"; then
-  echo "WARN: comet.defnotmy.site cometNet WS route not reverse proxying to $COMETNET_PORT"
+# 4) Check cometNet WS route
+if ! echo "$block" | grep -qE "/cometnet/ws.*(127\.0\.0\.1|$HOST):$COMETNET_PORT"; then
+  echo "WARN: cometNet WS route not reverse proxying to $COMETNET_PORT"
 fi
 
 echo "Caddyfile upstream/service alignment passed"

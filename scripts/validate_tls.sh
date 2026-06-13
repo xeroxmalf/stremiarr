@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
+PROJECT="${1:-/docker-configs}"
 COMPOSE="$PROJECT/compose/docker-compose.yml"
 CADDYFILE="$PROJECT/caddy/Caddyfile"
 
@@ -26,10 +26,10 @@ if ! grep -q "cloudflare" "$CADDYFILE"; then
 fi
 
 # 3) Ensure TLS snippets exist and are imported
-for site in "stl\.defnotmy\.site" "llama\.defnotmy\.site" "comet\.defnotmy\.site"; do
-  block=$(awk "/https?:\/\/$site/,/^[}]/" "$CADDYFILE")
+for prefix in "stl" "comet"; do
+  block=$(awk "/https?:\/\/$prefix\.[a-z0-9.-]+/,/^[}]/" "$CADDYFILE")
   if ! echo "$block" | grep -qE "import cloudflare_auth"; then
-    echo "WARN: $site not importing cloudflare_auth (TLS/DNS issue)"
+    echo "WARN: $prefix site not importing cloudflare_auth (TLS/DNS issue)"
   fi
 done
 

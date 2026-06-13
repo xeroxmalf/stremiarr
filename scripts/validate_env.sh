@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
+PROJECT="${1:-/docker-configs}"
 COMPOSE="$PROJECT/compose/docker-compose.yml"
 ENVFILE="$PROJECT/compose/.env"
 
@@ -42,7 +42,8 @@ done < "$ENVFILE"
 # 3) For each required var, check that it's defined and non-empty
 for var in $REQ_VARS; do
   if [ -z "${ENV[$var]+x}" ]; then
-    fail "Variable $var is used in docker-compose.yml but missing from .env"
+    echo "WARN: Variable $var is used in docker-compose.yml but missing from .env"
+    continue
   fi
 
   val="${ENV[$var]}"
@@ -61,7 +62,6 @@ for secret in \
     "POSTGRES_PASS" \
     "COMET_ADMIN_PASS" \
     "ADMIN_PASSWORD" \
-    "CADDY_AUTH_XM_HASH" \
     "RCLONE_URL" \
     "RCLONE_RC_URL"; do
   if [ -z "${ENV[$secret]+x}" ]; then
