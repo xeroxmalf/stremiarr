@@ -265,4 +265,63 @@ services:
     environment:
       - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
 
+  zurg:
+    image: ghcr.io/debridmediamanager/zurg-testing:latest
+    container_name: zurg
+    hostname: zurg
+    restart: always
+    network_mode: host
+    volumes:
+      - ../zurg/config.yml:/app/config.yml
+      - ../zurg/data:/app/data
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://127.0.0.1:9999/ || exit 1
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  rclone-mount:
+    image: rclone/rclone:latest
+    container_name: rclone-mount
+    hostname: rclone-mount
+    network_mode: host
+    restart: always
+    cap_add:
+      - SYS_ADMIN
+    devices:
+      - /dev/fuse
+    security_opt:
+      - apparmor:unconfined
+    volumes:
+      - ../mnt/zurg:/data:shared
+    command: [
+      "mount", ":webdav:", "/data",
+      "--webdav-url", "http://127.0.0.1:9999/dav",
+      "--vfs-cache-mode", "off",
+      "--dir-cache-time", "10s",
+      "--allow-other",
+      "--read-only"
+    ]
+    depends_on:
+      zurg:
+        condition: service_healthy
+
+  plex:
+    image: lscr.io/linuxserver/plex:latest
+    container_name: plex
+    hostname: plex
+    network_mode: host
+    restart: always
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - VERSION=docker
+      - PLEX_CLAIM=${PLEX_CLAIM:-}
+    volumes:
+      - ../plex/config:/config
+      - ../mnt/zurg:/data/movies:ro
+    depends_on:
+      - rclone-mount
+
 
