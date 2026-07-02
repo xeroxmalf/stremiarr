@@ -70,15 +70,16 @@ func initDB() {
 		conn.SetConnMaxLifetime(5 * time.Minute)
 		log.Printf("💾 Postgres database initialized")
 	} else {
-		os.MkdirAll("/data", 0755)
-		conn, err = sql.Open("sqlite", "/data/streams.db?_busy_timeout=5000&_journal_mode=WAL&_sync=NORMAL&_cache_size=-20000")
+		conn, err = sql.Open("sqlite", DataDir+"/streams.db?_busy_timeout=5000&_journal_mode=WAL&_sync=NORMAL&_cache_size=-20000")
 		if err != nil {
 			log.Fatalf("❌ Failed to open SQLite DB: %v", err)
 		}
-		conn.Exec("PRAGMA temp_store = MEMORY;")
+		if _, err := conn.Exec("PRAGMA temp_store = MEMORY;"); err != nil {
+			log.Printf("⚠️ Failed to set PRAGMA temp_store: %v", err)
+		}
 		conn.SetMaxOpenConns(1) // Avoid SQLite database is locked
 		isPg = false
-		log.Printf("💾 SQLite database initialized at /data/streams.db")
+		log.Printf("💾 SQLite database initialized at %s/streams.db", DataDir)
 	}
 
 	db = &DBWrapper{conn: conn, isPg: isPg}
@@ -131,7 +132,9 @@ func runMigrations() {
 			if err != nil {
 				log.Printf("⚠️ Migration %d warning (might already exist): %v", version, err)
 			}
-			db.Exec("INSERT INTO handoff_migrations (version) VALUES (?)", version)
+			if _, err := db.Exec("INSERT INTO handoff_migrations (version) VALUES (?)", version); err != nil {
+				log.Printf("⚠️ Failed to record migration v%d: %v", version, err)
+			}
 			log.Printf("🔄 Applied DB migration v%d", version)
 		}
 	}

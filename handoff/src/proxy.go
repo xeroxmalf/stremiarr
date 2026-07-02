@@ -16,7 +16,21 @@ import (
 	"time"
 )
 
-var seederRegex = regexp.MustCompile(`(?i)(?:👤|seeders:|s:|s\s+|seeders\s+)\s*(\d+)`)
+var (
+	seederRegex = regexp.MustCompile(`(?i)(?:👤|seeders:|s:|s\s+|seeders\s+)\s*(\d+)`)
+	globalBlacklistRegex *regexp.Regexp
+)
+
+func init() {
+	if pattern := os.Getenv("STREAM_BLACKLIST_REGEX"); pattern != "" {
+		compiled, err := regexp.Compile("(?i)" + pattern)
+		if err == nil {
+			globalBlacklistRegex = compiled
+		} else {
+			log.Printf("[Stream] ⚠️ Invalid STREAM_BLACKLIST_REGEX pattern: %v", err)
+		}
+	}
+}
 
 func getTargetURL(addonURL, subPath, rawQuery string) string {
 	base := strings.TrimSuffix(addonURL, "/manifest.json")
@@ -142,17 +156,7 @@ func fetchAndCacheStreams(targetURL string, config Config) ([]byte, error) {
 	seenURLs := make(map[string]bool)
 	var deduped []interface{}
 	
-	// Phase 5: Compile blacklist regex once outside the loop for massive performance boost
-	blacklistPattern := os.Getenv("STREAM_BLACKLIST_REGEX")
-	var blacklistRegex *regexp.Regexp
-	if blacklistPattern != "" {
-		compiled, err := regexp.Compile("(?i)" + blacklistPattern)
-		if err == nil {
-			blacklistRegex = compiled
-		} else {
-			log.Printf("[Stream] ⚠️ Invalid STREAM_BLACKLIST_REGEX pattern: %v", err)
-		}
-	}
+	// Phase 5: Blacklist filtering (using global compiled regex)
 
 	for _, s := range allFetcher.Streams {
 		if stream, ok := s.(map[string]interface{}); ok {
@@ -163,15 +167,15 @@ func fetchAndCacheStreams(targetURL string, config Config) ([]byte, error) {
 				}
 
 				// Blacklist filtering (Phase 5)
-				if blacklistRegex != nil {
+				if globalBlacklistRegex != nil {
 					matched := false
 					if title, ok := stream["title"].(string); ok {
-						if blacklistRegex.MatchString(title) {
+						if globalBlacklistRegex.MatchString(title) {
 							matched = true
 						}
 					}
 					if name, ok := stream["name"].(string); ok {
-						if blacklistRegex.MatchString(name) {
+						if globalBlacklistRegex.MatchString(name) {
 							matched = true
 						}
 					}
@@ -195,7 +199,9 @@ func fetchAndCacheStreams(targetURL string, config Config) ([]byte, error) {
 	for _, s := range deduped {
 		if stream, ok := s.(map[string]interface{}); ok {
 			if urlStr, ok := stream["url"].(string); ok && urlStr != "" {
-				db.Exec("INSERT INTO stream_urls (url, is_valid, fail_count) VALUES (?, TRUE, 0) ON CONFLICT(url) DO NOTHING", urlStr)
+				if _, err := db.Exec("INSERT INTO stream_urls (url, is_valid, fail_count) VALUES (?, TRUE, 0) ON CONFLICT(url) DO NOTHING", urlStr); err != nil {
+					log.Printf("⚠️ Failed to insert stream URL: %v", err)
+				}
 				select {
 				case validateCh <- urlStr:
 				default:
@@ -210,7 +216,9 @@ func fetchAndCacheStreams(targetURL string, config Config) ([]byte, error) {
 	}
 
 	body, _ := json.Marshal(finalResult)
-	cache.SetStreamCache(targetURL, string(body), 7*24*time.Hour)
+	if err := cache.SetStreamCache(targetURL, string(body), 7*24*time.Hour); err != nil {
+		log.Printf("⚠️ Failed to set stream cache: %v", err)
+	}
 
 	log.Printf("[Stream] ✅ Fetched %d streams from %d sources", len(deduped), len(sources))
 	FireWebhook("streams_fetched", fmt.Sprintf("Fetched %d streams for target %s", len(deduped), targetURL))
@@ -246,7 +254,9 @@ func serveStreamsJSON(w http.ResponseWriter, r *http.Request, body []byte, idOrC
 	var result map[string]interface{}
 	if err := json.Unmarshal(body, &result); err != nil {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write(body)
+		if _, err := w.Write(body); err != nil {
+			log.Printf("⚠️ Failed to write response: %v", err)
+		}
 		return
 	}
 
@@ -394,7 +404,11 @@ func serveStreamsJSON(w http.ResponseWriter, r *http.Request, body []byte, idOrC
 						}
 						if hash != "" {
 							log.Printf("[RD] 📤 Queuing uncached torrent for RD download: %s (Seeders: %d)", hash, seeders)
-							go rdAddMagnet(hash)
+							go func(h string) {
+								if err := rdAddMagnet(h); err != nil {
+									log.Printf("⚠️ Failed to add magnet: %v", err)
+								}
+							}(hash)
 						}
 					}
 				}
@@ -412,7 +426,9 @@ func serveStreamsJSON(w http.ResponseWriter, r *http.Request, body []byte, idOrC
 
 	modifiedBody, _ := json.Marshal(result)
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(modifiedBody)
+	if _, err := w.Write(modifiedBody); err != nil {
+		log.Printf("⚠️ Failed to write response: %v", err)
+	}
 	log.Printf("[Stream] ✅ Served %d streams (%d actively redacted, incl. junk/dead/dupes)", wrappedCount, redactedCount)
 }
 
@@ -441,7 +457,9 @@ func proxyRequest(w http.ResponseWriter, r *http.Request, addonURL string, subPa
 			w.Header()[k] = v
 		}
 		w.WriteHeader(statusCode)
-		w.Write(body)
+		if _, err := w.Write(body); err != nil {
+			log.Printf("⚠️ Failed to write response: %v", err)
+		}
 		log.Printf("[Catalog] ⚡ Cache hit for: %s", targetURL)
 		return
 	}
@@ -458,7 +476,9 @@ func proxyRequest(w http.ResponseWriter, r *http.Request, addonURL string, subPa
 
 	body, _ := io.ReadAll(resp.Body)
 
-	cache.SetCatalogCache(targetURL, body, resp.Header.Clone(), resp.StatusCode, 5*time.Minute)
+	if err := cache.SetCatalogCache(targetURL, body, resp.Header.Clone(), resp.StatusCode, 5*time.Minute); err != nil {
+		log.Printf("⚠️ Failed to set catalog cache: %v", err)
+	}
 
 	if strings.Contains(subPath, "meta/") {
 		body = AugmentMetadata(body)
@@ -468,5 +488,7 @@ func proxyRequest(w http.ResponseWriter, r *http.Request, addonURL string, subPa
 		w.Header()[k] = v
 	}
 	w.WriteHeader(resp.StatusCode)
-	w.Write(body)
+	if _, err := w.Write(body); err != nil {
+		log.Printf("⚠️ Failed to write response: %v", err)
+	}
 }

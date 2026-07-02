@@ -16,10 +16,16 @@ func DetectAnomalies() {
 	var highFailStreams int
 
 	// Count total streams
-	db.QueryRow("SELECT COUNT(*) FROM stream_urls").Scan(&totalStreams)
+	if err := db.QueryRow("SELECT COUNT(*) FROM stream_urls").Scan(&totalStreams); err != nil {
+		log.Printf("⚠️ Failed to count streams: %v", err)
+		return
+	}
 
 	// Count streams that have failed 3 or more times (dead links)
-	db.QueryRow("SELECT COUNT(*) FROM stream_urls WHERE fail_count >= 3").Scan(&highFailStreams)
+	if err := db.QueryRow("SELECT COUNT(*) FROM stream_urls WHERE fail_count >= 3").Scan(&highFailStreams); err != nil {
+		log.Printf("⚠️ Failed to count high failure streams: %v", err)
+		return
+	}
 
 	if totalStreams == 0 {
 		return

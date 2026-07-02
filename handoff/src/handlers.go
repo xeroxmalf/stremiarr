@@ -22,7 +22,9 @@ func routeHandler(w http.ResponseWriter, r *http.Request) {
 	// Public health endpoint for Docker healthchecks (no auth required)
 	if r.URL.Path == "/health" {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		if _, err := w.Write([]byte("OK")); err != nil {
+			log.Printf("⚠️ Failed to write response: %v", err)
+		}
 		return
 	}
 
@@ -124,7 +126,9 @@ func streamHandler(w http.ResponseWriter, r *http.Request, conf Config, idOrConf
 
 		// Fire Stale-While-Revalidate worker into background
 		go func() {
-			fetchAndCacheStreams(targetURL, conf)
+			if _, err := fetchAndCacheStreams(targetURL, conf); err != nil {
+				log.Printf("⚠️ SWR worker failed to fetch streams: %v", err)
+			}
 		}()
 		return
 	}
@@ -157,7 +161,9 @@ func manifestHandler(w http.ResponseWriter, r *http.Request, conf Config, subPat
 	defer resp.Body.Close()
 
 	var manifest map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&manifest)
+	if err := json.NewDecoder(resp.Body).Decode(&manifest); err != nil {
+		log.Printf("[Meta] ⚠️ Failed to decode manifest: %v", err)
+	}
 
 	if name, ok := manifest["name"].(string); ok {
 		manifest["name"] = name + " (Handoff)"
@@ -167,6 +173,8 @@ func manifestHandler(w http.ResponseWriter, r *http.Request, conf Config, subPat
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(manifest)
+	if err := json.NewEncoder(w).Encode(manifest); err != nil {
+		log.Printf("⚠️ Failed to encode manifest: %v", err)
+	}
 	log.Printf("[Manifest] ✅ Successfully wrapped and injected manifest identity.")
 }

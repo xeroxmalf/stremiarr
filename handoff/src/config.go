@@ -7,6 +7,17 @@ import (
 	"time"
 )
 
+var DataDir = "/data"
+
+func init() {
+	if d := os.Getenv("DATA_DIR"); d != "" {
+		DataDir = d
+	}
+	if err := os.MkdirAll(DataDir, 0755); err != nil {
+		panic("Failed to initialize DataDir: " + err.Error())
+	}
+}
+
 type Config struct {
 	AddonURL       string `json:"addon_url"`
 	TorrentioURL   string `json:"torrentio_url"`
@@ -44,13 +55,13 @@ type bytesPool struct {
 
 func (p *bytesPool) Get() []byte {
 	if buf := p.pool.Get(); buf != nil {
-		return buf.([]byte)
+		return *(buf.(*[]byte))
 	}
 	return make([]byte, 128*1024)
 }
 
 func (p *bytesPool) Put(buf []byte) {
-	p.pool.Put(buf)
+	p.pool.Put(&buf)
 }
 
 var proxyPool = &bytesPool{}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -61,13 +62,23 @@ func serveAPIStats(w http.ResponseWriter, r *http.Request) {
 	var totalURLs, validURLs, failedURLs int
 	var cachedRequests, recentValidations int
 
-	db.QueryRow("SELECT COUNT(*) FROM stream_urls").Scan(&totalURLs)
-	db.QueryRow("SELECT COUNT(*) FROM stream_urls WHERE is_valid = TRUE").Scan(&validURLs)
-	db.QueryRow("SELECT COUNT(*) FROM stream_urls WHERE fail_count > 0").Scan(&failedURLs)
-	db.QueryRow("SELECT COUNT(*) FROM stream_cache").Scan(&cachedRequests)
-	db.QueryRow("SELECT COUNT(*) FROM stream_urls WHERE last_validated > ?", time.Now().Add(-10*time.Minute)).Scan(&recentValidations)
+	if err := db.QueryRow("SELECT COUNT(*) FROM stream_urls").Scan(&totalURLs); err != nil {
+		log.Printf("⚠️ db error: %v", err)
+	}
+	if err := db.QueryRow("SELECT COUNT(*) FROM stream_urls WHERE is_valid = TRUE").Scan(&validURLs); err != nil {
+		log.Printf("⚠️ db error: %v", err)
+	}
+	if err := db.QueryRow("SELECT COUNT(*) FROM stream_urls WHERE fail_count > 0").Scan(&failedURLs); err != nil {
+		log.Printf("⚠️ db error: %v", err)
+	}
+	if err := db.QueryRow("SELECT COUNT(*) FROM stream_cache").Scan(&cachedRequests); err != nil {
+		log.Printf("⚠️ db error: %v", err)
+	}
+	if err := db.QueryRow("SELECT COUNT(*) FROM stream_urls WHERE last_validated > ?", time.Now().Add(-10*time.Minute)).Scan(&recentValidations); err != nil {
+		log.Printf("⚠️ db error: %v", err)
+	}
 
-	w.Write([]byte(fmt.Sprintf(`{
+	if _, err := w.Write([]byte(fmt.Sprintf(`{
 		"totalStreams": %d,
 		"validStreams": %d,
 		"failedStreams": %d,
@@ -77,13 +88,17 @@ func serveAPIStats(w http.ResponseWriter, r *http.Request) {
 	}`,
 		totalURLs, validURLs, failedURLs, cachedRequests, recentValidations,
 		time.Since(startTime).Round(time.Second).String(),
-	)))
+	))); err != nil {
+		log.Printf("⚠️ Failed to write stats response: %v", err)
+	}
 }
 
 func serveAPIBandwidth(w http.ResponseWriter, r *http.Request) {
 	stats := GetBandwidthStats()
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(stats)
+	if err := json.NewEncoder(w).Encode(stats); err != nil {
+		log.Printf("⚠️ Failed to encode bandwidth stats: %v", err)
+	}
 }
 
 func serveAPIKeys(w http.ResponseWriter, r *http.Request) {
@@ -121,7 +136,9 @@ func serveAPIKeys(w http.ResponseWriter, r *http.Request) {
 			}
 			keys = append(keys, info)
 		}
-		w.Write([]byte(fmt.Sprintf(`{"keys": %s}`, marshalJSON(keys))))
+		if _, err := w.Write([]byte(fmt.Sprintf(`{"keys": %s}`, marshalJSON(keys)))); err != nil {
+			log.Printf("⚠️ Failed to write keys response: %v", err)
+		}
 		return
 	}
 
@@ -129,13 +146,18 @@ func serveAPIKeys(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Token string `json:"token"`
 		}
-		json.NewDecoder(r.Body).Decode(&req)
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
+			return
+		}
 		trimmed := strings.TrimSpace(req.Token)
 		if trimmed != "" {
 			// Check if already exists
 			for _, existing := range rd.Keys {
 				if existing.Token == trimmed {
-					w.Write([]byte(`{"status": "ok", "message": "Key already exists"}`))
+					if _, err := w.Write([]byte(`{"status": "ok", "message": "Key already exists"}`)); err != nil {
+						log.Printf("⚠️ Failed to write response: %v", err)
+					}
 					return
 				}
 			}
@@ -152,7 +174,9 @@ func serveAPIKeys(w http.ResponseWriter, r *http.Request) {
 			}
 			saveKeysToDisk(allDiskKeys)
 		}
-		w.Write([]byte(`{"status": "ok", "message": "Key added"}`))
+		if _, err := w.Write([]byte(`{"status": "ok", "message": "Key added"}`)); err != nil {
+			log.Printf("⚠️ Failed to write response: %v", err)
+		}
 		return
 	}
 
@@ -183,8 +207,9 @@ func serveAPIKeys(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		saveKeysToDisk(allDiskKeys)
-
-		w.Write([]byte(`{"status": "ok", "message": "Key deleted"}`))
+		if _, err := w.Write([]byte(`{"status": "ok", "message": "Key deleted"}`)); err != nil {
+			log.Printf("⚠️ Failed to write response: %v", err)
+		}
 		return
 	}
 }
@@ -195,7 +220,9 @@ func serveAPISourcesGet(w http.ResponseWriter, r *http.Request) {
 	copy(sources, addonSources)
 	sourcesMu.Unlock()
 
-	w.Write([]byte(fmt.Sprintf(`{"sources": %s}`, marshalJSON(sources))))
+	if _, err := w.Write([]byte(fmt.Sprintf(`{"sources": %s}`, marshalJSON(sources)))); err != nil {
+		log.Printf("⚠️ Failed to write sources: %v", err)
+	}
 }
 
 func serveAPISourcesUpdate(w http.ResponseWriter, r *http.Request) {
@@ -213,7 +240,9 @@ func serveAPISourcesUpdate(w http.ResponseWriter, r *http.Request) {
 	sourcesMu.Unlock()
 	saveSourcesToDisk()
 
-	w.Write([]byte(`{"status": "ok", "message": "Sources updated"}`))
+	if _, err := w.Write([]byte(`{"status": "ok", "message": "Sources updated"}`)); err != nil {
+		log.Printf("⚠️ Failed to write response: %v", err)
+	}
 }
 
 func serveAPIMappings(w http.ResponseWriter, r *http.Request) {
@@ -222,12 +251,17 @@ func serveAPIMappings(w http.ResponseWriter, r *http.Request) {
 			AddonURL string `json:"addon_url"`
 			Alias    string `json:"alias"`
 		}
-		json.NewDecoder(r.Body).Decode(&req)
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
+			return
+		}
 		
 		addonURL := strings.TrimSpace(req.AddonURL)
 		if addonURL == "" {
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{"error": "addon_url is required"})
+			if err := json.NewEncoder(w).Encode(map[string]string{"error": "addon_url is required"}); err != nil {
+				log.Printf("⚠️ Failed to write error response: %v", err)
+			}
 			return
 		}
 
@@ -241,23 +275,32 @@ func serveAPIMappings(w http.ResponseWriter, r *http.Request) {
 		saveMappings()
 
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]string{"alias": alias, "addon_url": addonURL})
+		if err := json.NewEncoder(w).Encode(map[string]string{"alias": alias, "addon_url": addonURL}); err != nil {
+			log.Printf("⚠️ Failed to write response: %v", err)
+		}
 		return
 	}
 
 	if r.Method == "DELETE" {
-		r.ParseForm()
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Failed to parse form", http.StatusBadRequest)
+			return
+		}
 		alias := r.FormValue("alias")
 		if alias != "" {
 			aliasMappings.Delete(alias)
 			saveMappings()
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(map[string]string{"status": "deleted"})
+			if err := json.NewEncoder(w).Encode(map[string]string{"status": "deleted"}); err != nil {
+				log.Printf("⚠️ Failed to write response: %v", err)
+			}
 			return
 		}
 
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "missing alias"})
+		if err := json.NewEncoder(w).Encode(map[string]string{"error": "missing alias"}); err != nil {
+			log.Printf("⚠️ Failed to write response: %v", err)
+		}
 		return
 	}
 
@@ -267,7 +310,9 @@ func serveAPIMappings(w http.ResponseWriter, r *http.Request) {
 		return true
 	})
 
-	w.Write([]byte(fmt.Sprintf(`{"mappings": %s}`, marshalJSON(mappings))))
+	if _, err := w.Write([]byte(fmt.Sprintf(`{"mappings": %s}`, marshalJSON(mappings)))); err != nil {
+		log.Printf("⚠️ Failed to write response: %v", err)
+	}
 }
 
 func serveAPIClean(w http.ResponseWriter, r *http.Request) {
@@ -297,7 +342,9 @@ func serveAPIClean(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Write([]byte(`{"status": "ok", "message": "Cleaned failed and stale streams"}`))
+	if _, err = w.Write([]byte(`{"status": "ok", "message": "Cleaned failed and stale streams"}`)); err != nil {
+		log.Printf("⚠️ Failed to write response: %v", err)
+	}
 }
 
 func serveAPICache(w http.ResponseWriter, r *http.Request) {
@@ -316,7 +363,9 @@ func serveAPICache(w http.ResponseWriter, r *http.Request) {
 	// Clear in-memory cache
 	catalogCache.Clear()
 
-	w.Write([]byte(`{"status": "ok", "message": "Cache cleared"}`))
+	if _, err = w.Write([]byte(`{"status": "ok", "message": "Cache cleared"}`)); err != nil {
+		log.Printf("⚠️ Failed to write response: %v", err)
+	}
 }
 
 func marshalJSON(v interface{}) string {
@@ -338,8 +387,10 @@ func serveAPIStremioAuth(w http.ResponseWriter, r *http.Request) {
 		} else if len(key) > 0 {
 			prefix = key
 		}
-		w.Write([]byte(fmt.Sprintf(`{"authenticated":%v,"auth_key_prefix":%q}`,
-			key != "", prefix)))
+		if _, err := w.Write([]byte(fmt.Sprintf(`{"authenticated":%v,"auth_key_prefix":%q}`,
+			key != "", prefix))); err != nil {
+			log.Printf("⚠️ Failed to write response: %v", err)
+		}
 
 	case "POST":
 		var req struct {
@@ -348,20 +399,26 @@ func serveAPIStremioAuth(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte(`{"error":"invalid request body"}`))
+			if _, wErr := w.Write([]byte(`{"error":"invalid request body"}`)); wErr != nil {
+				log.Printf("⚠️ Failed to write error response: %v", wErr)
+			}
 			return
 		}
 		req.Email = strings.TrimSpace(req.Email)
 		if req.Email == "" || req.Password == "" {
 			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte(`{"error":"email and password are required"}`))
+			if _, err := w.Write([]byte(`{"error":"email and password are required"}`)); err != nil {
+				log.Printf("⚠️ Failed to write error response: %v", err)
+			}
 			return
 		}
 
 		authKey, err := stremioLogin(req.Email, req.Password)
 		if err != nil {
 			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte(fmt.Sprintf(`{"error":%q}`, err.Error())))
+			if _, err := w.Write([]byte(fmt.Sprintf(`{"error":%q}`, err.Error()))); err != nil {
+			log.Printf("⚠️ Failed to write error response: %v", err)
+		}
 			return
 		}
 
@@ -369,14 +426,18 @@ func serveAPIStremioAuth(w http.ResponseWriter, r *http.Request) {
 		stremioAuthKey = authKey
 		stremioAuthMu.Unlock()
 		saveStremioAuth(authKey)
-		w.Write([]byte(`{"status":"ok","message":"Authenticated"}`))
+		if _, err := w.Write([]byte(`{"status":"ok","message":"Authenticated"}`)); err != nil {
+			log.Printf("⚠️ Failed to write response: %v", err)
+		}
 
 	case "DELETE":
 		stremioAuthMu.Lock()
 		stremioAuthKey = ""
 		stremioAuthMu.Unlock()
-		os.Remove(stremioAuthPath)
-		w.Write([]byte(`{"status":"ok","message":"Disconnected"}`))
+		os.Remove(getStremioAuthPath())
+		if _, err := w.Write([]byte(`{"status":"ok","message":"Disconnected"}`)); err != nil {
+			log.Printf("⚠️ Failed to write response: %v", err)
+		}
 
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -390,14 +451,19 @@ func serveAPIPrefetch(w http.ResponseWriter, r *http.Request) {
 		prefetchStatusMu.RLock()
 		data, _ := json.Marshal(prefetchStatus)
 		prefetchStatusMu.RUnlock()
-		w.Write(data)
+		if _, err := w.Write(data); err != nil {
+			log.Printf("⚠️ Failed to write prefetch status: %v", err)
+		}
 
 	case "POST":
 		var req struct {
 			Limit int  `json:"limit"`
 			Force bool `json:"force"`
 		}
-		json.NewDecoder(r.Body).Decode(&req)
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
+			return
+		}
 
 		stremioAuthMu.RLock()
 		authKey := stremioAuthKey
@@ -405,7 +471,9 @@ func serveAPIPrefetch(w http.ResponseWriter, r *http.Request) {
 
 		if authKey == "" {
 			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte(`{"error":"not authenticated with Stremio"}`))
+			if _, err := w.Write([]byte(`{"error":"not authenticated with Stremio"}`)); err != nil {
+				log.Printf("⚠️ Failed to write response: %v", err)
+			}
 			return
 		}
 
@@ -415,7 +483,9 @@ func serveAPIPrefetch(w http.ResponseWriter, r *http.Request) {
 
 		if running {
 			w.WriteHeader(http.StatusConflict)
-			w.Write([]byte(`{"error":"job already running"}`))
+			if _, err := w.Write([]byte(`{"error":"job already running"}`)); err != nil {
+				log.Printf("⚠️ Failed to write response: %v", err)
+			}
 			return
 		}
 
@@ -436,7 +506,9 @@ func serveAPIPrefetch(w http.ResponseWriter, r *http.Request) {
 		prefetchStatusMu.Unlock()
 
 		go runPrefetchJob(ctx, authKey, req.Limit, req.Force)
-		w.Write([]byte(`{"status":"started"}`))
+		if _, err := w.Write([]byte(`{"status":"started"}`)); err != nil {
+			log.Printf("⚠️ Failed to write response: %v", err)
+		}
 
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -455,5 +527,7 @@ func serveAPIPrefetchStop(w http.ResponseWriter, r *http.Request) {
 		prefetchCancel = nil
 	}
 	prefetchCancelMu.Unlock()
-	w.Write([]byte(`{"status":"ok"}`))
+	if _, err := w.Write([]byte(`{"status":"ok"}`)); err != nil {
+		log.Printf("⚠️ Failed to write response: %v", err)
+	}
 }

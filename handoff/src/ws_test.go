@@ -38,12 +38,16 @@ func TestWebSocketConnection(t *testing.T) {
 
 	hub.mu.Lock()
 	for conn := range hub.clients {
-		conn.WriteJSON(msg)
+		if err := conn.WriteJSON(msg); err != nil {
+			t.Logf("Failed to write JSON: %v", err)
+		}
 	}
 	hub.mu.Unlock()
 
 	// Read messages from websocket
-	ws.SetReadDeadline(time.Now().Add(2 * time.Second))
+	if err := ws.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatalf("could not set read deadline: %v", err)
+	}
 	for i := 0; i < 2; i++ {
 		_, p, err := ws.ReadMessage()
 		if err != nil {

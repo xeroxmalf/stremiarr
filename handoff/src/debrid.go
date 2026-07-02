@@ -15,7 +15,6 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -159,13 +158,15 @@ func (rd *RealDebridProvider) getActiveToken() string {
 	}
 	now := time.Now()
 	for i := 0; i < len(rd.Keys); i++ {
-		idx := (atomic.AddUint64(&rd.TokenIdx, 1)) % uint64(len(rd.Keys))
+		rd.TokenIdx++
+		idx := rd.TokenIdx % uint64(len(rd.Keys))
 		if rd.Keys[idx].LockedOutUntil.Before(now) {
 			return rd.Keys[idx].Token
 		}
 	}
 	// Fallback
-	idx := (atomic.AddUint64(&rd.TokenIdx, 1)) % uint64(len(rd.Keys))
+	rd.TokenIdx++
+	idx := rd.TokenIdx % uint64(len(rd.Keys))
 	return rd.Keys[idx].Token
 }
 
@@ -254,10 +255,12 @@ func (rd *RealDebridProvider) IsRateLimited() bool {
 var debridProviders []DebridProvider
 
 func loadKeysFromDisk() []string {
-	if data, err := os.ReadFile("/data/keys.json"); err == nil {
+	if data, err := os.ReadFile(DataDir + "/keys.json"); err == nil {
 		var fileKeys []string
-		if json.Unmarshal(data, &fileKeys) == nil {
+		if err := json.Unmarshal(data, &fileKeys); err == nil {
 			return fileKeys
+		} else {
+			log.Printf("⚠️ Failed to parse keys.json: %v", err)
 		}
 	}
 	return nil
@@ -265,7 +268,11 @@ func loadKeysFromDisk() []string {
 
 func saveKeysToDisk(keys []string) {
 	if data, err := json.MarshalIndent(keys, "", "  "); err == nil {
-		os.WriteFile("/data/keys.json", data, 0644)
+		if err := os.WriteFile(DataDir+"/keys.json", data, 0644); err != nil {
+			log.Printf("⚠️ Failed to write keys.json: %v", err)
+		}
+	} else {
+		log.Printf("⚠️ Failed to marshal keys: %v", err)
 	}
 }
 

@@ -10,16 +10,16 @@ import (
 	"strings"
 )
 
-const sourcesPath = "/data/sources.json"
+func getSourcesPath() string { return DataDir + "/sources.json" }
 
 // loadSourcesFromDisk loads addon sources from /data/sources.json.
 // If the file does not exist, the hardcoded defaults in config.go remain.
 func loadSourcesFromDisk() {
-	if _, err := os.Stat(sourcesPath); os.IsNotExist(err) {
+	if _, err := os.Stat(getSourcesPath()); os.IsNotExist(err) {
 		return
 	}
 
-	data, err := os.ReadFile(sourcesPath)
+	data, err := os.ReadFile(getSourcesPath())
 	if err != nil {
 		log.Printf("⚠️ Failed to read sources.json: %v", err)
 		return
@@ -50,9 +50,7 @@ func saveSourcesToDisk() {
 		return
 	}
 
-	os.MkdirAll("/data", 0755)
-
-	if err := os.WriteFile(sourcesPath, data, 0644); err != nil {
+	if err := os.WriteFile(getSourcesPath(), data, 0644); err != nil {
 		log.Printf("❌ Failed to write sources.json: %v", err)
 	}
 }
@@ -164,7 +162,9 @@ func discoverAddon(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("❌ [Discover] Validation failed for %s: %v", rawURL, err)
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		if err := json.NewEncoder(w).Encode(map[string]string{"error": err.Error()}); err != nil {
+			log.Printf("⚠️ Failed to write error response: %v", err)
+		}
 		return
 	}
 
@@ -177,7 +177,9 @@ func discoverAddon(w http.ResponseWriter, r *http.Request) {
 		if src.URL == rawURL {
 			sourcesMu.Unlock()
 			w.WriteHeader(http.StatusConflict)
-			json.NewEncoder(w).Encode(map[string]string{"error": "addon source already exists", "name": name, "id": id})
+			if err := json.NewEncoder(w).Encode(map[string]string{"error": "addon source already exists", "name": name, "id": id}); err != nil {
+				log.Printf("⚠️ Failed to write error response: %v", err)
+			}
 			return
 		}
 	}
@@ -207,12 +209,16 @@ func discoverAddon(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"status":    "ok",
+		"message":   "Source discovered",
 		"name":      name,
 		"id":        id,
 		"resources": resourceNames,
-	})
+		"addon_url": rawURL,
+	}); err != nil {
+		log.Printf("⚠️ Failed to write response: %v", err)
+	}
 }
 
 func removeDiscoveredAddon(w http.ResponseWriter, r *http.Request) {
@@ -237,7 +243,9 @@ func removeDiscoveredAddon(w http.ResponseWriter, r *http.Request) {
 
 	if !found {
 		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]string{"error": "addon source not found"})
+		if err := json.NewEncoder(w).Encode(map[string]string{"error": "addon source not found"}); err != nil {
+			log.Printf("⚠️ Failed to write response: %v", err)
+		}
 		return
 	}
 
@@ -245,5 +253,7 @@ func removeDiscoveredAddon(w http.ResponseWriter, r *http.Request) {
 	log.Printf("🗑️ [Discover] Removed addon source: %s", rawURL)
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "message": "Addon source removed"})
+	if err := json.NewEncoder(w).Encode(map[string]string{"status": "ok", "message": "Addon source removed"}); err != nil {
+		log.Printf("⚠️ Failed to write response: %v", err)
+	}
 }

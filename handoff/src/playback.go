@@ -145,7 +145,9 @@ func playHandler(w http.ResponseWriter, r *http.Request, conf Config) {
 		if size > 0 && size < 20000000 {
 			log.Printf("[Play] ❌ RD Error Video caught at playback (%d bytes)! Striking and rejecting.", size)
 			// Mark as invalid in DB
-			db.Exec("UPDATE stream_urls SET is_valid = FALSE, last_validated = ? WHERE url = ?", time.Now(), targetLink)
+			if _, err := db.Exec("UPDATE stream_urls SET is_valid = FALSE, last_validated = ? WHERE url = ?", time.Now(), targetLink); err != nil {
+				log.Printf("⚠️ Failed to update stream validity: %v", err)
+			}
 			recordStrike(targetLink)
 			http.Error(w, "File blocked by Real-Debrid", http.StatusNotFound)
 			return
@@ -162,7 +164,9 @@ func playHandler(w http.ResponseWriter, r *http.Request, conf Config) {
 		if waitForVFS(targetPath, 3) {
 			log.Printf("[Play] 🎯 VFS Hit! Streaming via Rclone memory buffers.")
 			metricStreamsPlayed.Inc()
-			db.Exec("UPDATE stream_urls SET success_count = success_count + 1 WHERE url = ?", targetLink)
+			if _, err := db.Exec("UPDATE stream_urls SET success_count = success_count + 1 WHERE url = ?", targetLink); err != nil {
+				log.Printf("⚠️ Failed to update success count: %v", err)
+			}
 			targetUrl, _ := url.Parse(targetPath)
 			proxy := &httputil.ReverseProxy{
 				Director: func(req *http.Request) {
@@ -186,7 +190,9 @@ func playHandler(w http.ResponseWriter, r *http.Request, conf Config) {
 
 		log.Printf("[Play] ⚠️ VFS Miss. Engaging Direct RD Proxy.")
 		metricStreamsPlayed.Inc()
-		db.Exec("UPDATE stream_urls SET success_count = success_count + 1 WHERE url = ?", targetLink)
+		if _, err := db.Exec("UPDATE stream_urls SET success_count = success_count + 1 WHERE url = ?", targetLink); err != nil {
+			log.Printf("⚠️ Failed to update success count: %v", err)
+		}
 		targetUrl, _ := url.Parse(finalURL)
 		proxy := &httputil.ReverseProxy{
 			Director: func(req *http.Request) {
@@ -258,7 +264,9 @@ func playHandler(w http.ResponseWriter, r *http.Request, conf Config) {
 	}
 
 	log.Printf("[Play] 🎯 Streaming newly unlocked video via Rclone VFS: %s", filename)
-	db.Exec("UPDATE stream_urls SET success_count = success_count + 1 WHERE url = ?", targetLink)
+	if _, err := db.Exec("UPDATE stream_urls SET success_count = success_count + 1 WHERE url = ?", targetLink); err != nil {
+		log.Printf("⚠️ Failed to update success count: %v", err)
+	}
 
 	proxy := &httputil.ReverseProxy{
 		Director: func(req *http.Request) {

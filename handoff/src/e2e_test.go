@@ -20,15 +20,21 @@ func TestStremioE2EWorkflow(t *testing.T) {
 	upstreamMux := http.NewServeMux()
 	upstreamMux.HandleFunc("/manifest.json", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"id":"org.e2e.mock","version":"1.0.0","name":"E2E Mock","resources":["catalog","stream"],"types":["movie","series"]}`))
+		if _, err := w.Write([]byte(`{"id":"org.e2e.mock","version":"1.0.0","name":"E2E Mock","resources":["catalog","stream"],"types":["movie","series"]}`)); err != nil {
+			t.Logf("Failed to write mock response: %v", err)
+		}
 	})
 	upstreamMux.HandleFunc("/catalog/movie/top.json", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"metas":[{"id":"tt1234567","type":"movie","name":"Test Movie"}]}`))
+		if _, err := w.Write([]byte(`{"metas":[{"id":"tt1234567","type":"movie","name":"Test Movie"}]}`)); err != nil {
+			t.Logf("Failed to write mock response: %v", err)
+		}
 	})
 	upstreamMux.HandleFunc("/stream/movie/tt1234567.json", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"streams":[{"url":"http://fake.provider.com/download.mp4","name":"1080p Stream"}]}`))
+		if _, err := w.Write([]byte(`{"streams":[{"url":"http://fake.provider.com/download.mp4","name":"1080p Stream"}]}`)); err != nil {
+			t.Logf("Failed to write mock response: %v", err)
+		}
 	})
 
 	upstreamServer := httptest.NewServer(upstreamMux)

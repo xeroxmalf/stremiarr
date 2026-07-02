@@ -14,17 +14,20 @@ import (
 // --- ALIAS MAPPINGS ---
 var (
 	aliasMappings sync.Map
-	mappingsPath  = "/data/mappings.json"
 )
+
+func getMappingsPath() string {
+	return DataDir + "/mappings.json"
+}
 
 // --------------------------------
 
 func loadMappings() {
-	if _, err := os.Stat(mappingsPath); os.IsNotExist(err) {
+	if _, err := os.Stat(getMappingsPath()); os.IsNotExist(err) {
 		return
 	}
 
-	data, err := os.ReadFile(mappingsPath)
+	data, err := os.ReadFile(getMappingsPath())
 	if err != nil {
 		log.Printf("⚠️ Failed to read mappings.json: %v", err)
 		return
@@ -56,9 +59,7 @@ func saveMappings() {
 		return
 	}
 
-	os.MkdirAll("/data", 0755)
-
-	if err := os.WriteFile(mappingsPath, data, 0644); err != nil {
+	if err := os.WriteFile(getMappingsPath(), data, 0644); err != nil {
 		log.Printf("❌ Failed to write mappings.json: %v", err)
 	}
 }

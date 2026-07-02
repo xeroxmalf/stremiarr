@@ -10,7 +10,9 @@ import (
 
 func generateState() string {
 	b := make([]byte, 16)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		log.Printf("⚠️ Failed to read random bytes for state: %v", err)
+	}
 	return base64.URLEncoding.EncodeToString(b)
 }
 

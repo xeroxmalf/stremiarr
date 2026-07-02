@@ -50,31 +50,34 @@ var (
 	prefetchHistoryMu sync.Mutex
 )
 
-const stremioAuthPath = "/data/stremio_auth.json"
-const prefetchHistoryPath = "/data/prefetch_history.json"
+func getStremioAuthPath() string { return DataDir + "/stremio_auth.json" }
+func getPrefetchHistoryPath() string { return DataDir + "/prefetch_history.json" }
 
 func loadPrefetchHistory() {
 	prefetchHistoryMu.Lock()
 	defer prefetchHistoryMu.Unlock()
-	data, err := os.ReadFile(prefetchHistoryPath)
+	data, err := os.ReadFile(getPrefetchHistoryPath())
 	if err == nil {
-		json.Unmarshal(data, &prefetchHistory)
+		if err := json.Unmarshal(data, &prefetchHistory); err != nil {
+			log.Printf("⚠️ Failed to parse prefetch history: %v", err)
+		}
 	}
 }
 
 func savePrefetchHistory() {
 	prefetchHistoryMu.Lock()
 	defer prefetchHistoryMu.Unlock()
-	os.MkdirAll("/data", 0755)
 	data, err := json.Marshal(prefetchHistory)
 	if err == nil {
-		os.WriteFile(prefetchHistoryPath, data, 0644)
+		if err := os.WriteFile(getPrefetchHistoryPath(), data, 0644); err != nil {
+			log.Printf("⚠️ Failed to write prefetch history: %v", err)
+		}
 	}
 }
 
-// loadStremioAuth loads the saved auth key from /data/stremio_auth.json.
+// loadStremioAuth loads the saved auth key from DataDir.
 func loadStremioAuth() string {
-	data, err := os.ReadFile(stremioAuthPath)
+	data, err := os.ReadFile(getStremioAuthPath())
 	if err != nil {
 		return ""
 	}
@@ -87,16 +90,15 @@ func loadStremioAuth() string {
 	return ""
 }
 
-// saveStremioAuth saves the auth key to /data/stremio_auth.json.
+// saveStremioAuth saves the auth key to DataDir.
 func saveStremioAuth(authKey string) {
-	os.MkdirAll("/data", 0755)
 	payload := map[string]string{"auth_key": authKey}
 	data, err := json.MarshalIndent(payload, "", "  ")
 	if err != nil {
 		log.Printf("❌ [Prefetch] Failed to marshal stremio auth: %v", err)
 		return
 	}
-	if err := os.WriteFile(stremioAuthPath, data, 0644); err != nil {
+	if err := os.WriteFile(getStremioAuthPath(), data, 0644); err != nil {
 		log.Printf("❌ [Prefetch] Failed to write stremio_auth.json: %v", err)
 	}
 }

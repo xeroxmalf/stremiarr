@@ -63,11 +63,21 @@ func (h *WSHub) broadcastStats() {
 	var totalURLs, validURLs, failedURLs int
 	var cachedRequests, recentValidations int
 
-	db.QueryRow("SELECT COUNT(*) FROM stream_urls").Scan(&totalURLs)
-	db.QueryRow("SELECT COUNT(*) FROM stream_urls WHERE is_valid = TRUE").Scan(&validURLs)
-	db.QueryRow("SELECT COUNT(*) FROM stream_urls WHERE fail_count > 0").Scan(&failedURLs)
-	db.QueryRow("SELECT COUNT(*) FROM stream_cache").Scan(&cachedRequests)
-	db.QueryRow("SELECT COUNT(*) FROM stream_urls WHERE last_validated > ?", time.Now().Add(-10*time.Minute)).Scan(&recentValidations)
+	if err := db.QueryRow("SELECT COUNT(*) FROM stream_urls").Scan(&totalURLs); err != nil {
+		log.Printf("⚠️ ws error: %v", err)
+	}
+	if err := db.QueryRow("SELECT COUNT(*) FROM stream_urls WHERE is_valid = TRUE").Scan(&validURLs); err != nil {
+		log.Printf("⚠️ ws error: %v", err)
+	}
+	if err := db.QueryRow("SELECT COUNT(*) FROM stream_urls WHERE fail_count > 0").Scan(&failedURLs); err != nil {
+		log.Printf("⚠️ ws error: %v", err)
+	}
+	if err := db.QueryRow("SELECT COUNT(*) FROM stream_cache").Scan(&cachedRequests); err != nil {
+		log.Printf("⚠️ ws error: %v", err)
+	}
+	if err := db.QueryRow("SELECT COUNT(*) FROM stream_urls WHERE last_validated > ?", time.Now().Add(-10*time.Minute)).Scan(&recentValidations); err != nil {
+		log.Printf("⚠️ ws error: %v", err)
+	}
 
 	stats := map[string]interface{}{
 		"type":              "stats",
