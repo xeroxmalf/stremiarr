@@ -28,7 +28,19 @@ func PredictivePreCache(videoID string) {
 	
 	go func() {
 		// Discover hashes for next episode
-		hashes := fetchHashesForItem(nextVideoID, "series")
+		hashes, streamURLs := fetchHashesForItem(nextVideoID, "series")
+
+		// Queue any discovered stream URLs for validation
+		for _, u := range streamURLs {
+			if _, err := db.Exec("INSERT INTO stream_urls (url, is_valid, fail_count) VALUES (?, TRUE, 0) ON CONFLICT(url) DO NOTHING", u); err != nil {
+				log.Printf("⚠️ [Predictive] Failed to insert stream URL: %v", err)
+			}
+			select {
+			case validateCh <- u:
+			default:
+			}
+		}
+
 		if len(hashes) == 0 {
 			log.Printf("🔮 Predictive Pre-Caching: No hashes found for %s", nextVideoID)
 			return

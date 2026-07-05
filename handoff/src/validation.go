@@ -16,7 +16,56 @@ func initValidationPool() {
 	for i := 0; i < 2; i++ {
 		go validationWorker()
 	}
-	log.Printf("🛡️ API Validation Pool initialized (2 concurrent workers with rate limits)")
+	go revalidationSweep()
+	log.Printf("🛡️ API Validation Pool initialized (2 concurrent workers with rate limits + background sweep)")
+}
+
+// revalidationSweep periodically queries for stale streams and feeds them
+// into validateCh so they get re-checked even without user traffic.
+func revalidationSweep() {
+	// Initial delay to let the system settle after startup
+	time.Sleep(2 * time.Minute)
+
+	ticker := time.NewTicker(30 * time.Minute)
+	defer ticker.Stop()
+
+	runSweep := func() {
+		rows, err := db.Query(
+			"SELECT url FROM stream_urls WHERE last_validated IS NULL OR last_validated < ? ORDER BY last_validated ASC LIMIT 50",
+			time.Now().Add(-2*time.Hour),
+		)
+		if err != nil {
+			log.Printf("⚠️ [Revalidation] Failed to query stale streams: %v", err)
+			return
+		}
+		defer rows.Close()
+
+		count := 0
+		for rows.Next() {
+			var url string
+			if err := rows.Scan(&url); err != nil {
+				continue
+			}
+			select {
+			case validateCh <- url:
+				count++
+			default:
+				// Channel full, stop feeding
+				log.Printf("⚠️ [Revalidation] Channel full, queued %d of available stale streams", count)
+				return
+			}
+		}
+		if count > 0 {
+			log.Printf("🔄 [Revalidation] Sweep queued %d stale streams for re-validation", count)
+		}
+	}
+
+	// Run once immediately after the initial delay
+	runSweep()
+
+	for range ticker.C {
+		runSweep()
+	}
 }
 
 func validationWorker() {

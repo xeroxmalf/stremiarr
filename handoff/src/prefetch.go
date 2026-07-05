@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"strconv"
@@ -192,9 +193,9 @@ func fetchStremioLibrary(authKey string) ([]LibraryItem, error) {
 
 // fetchHashesForItem queries all enabled addon sources for a given IMDB ID.
 // Constructs stream URL by replacing /manifest.json with /stream/{type}/{imdbId}.json
-// Returns all unique infoHash values found across all sources.
-// NOTE: does NOT use StreamFetcher.Add() because that filters to HTTP-only streams.
-func fetchHashesForItem(imdbID, mediaType string) map[string]int {
+// Returns all unique infoHash values found across all sources, plus any HTTP stream URLs
+// discovered during the scan (for validation).
+func fetchHashesForItem(imdbID, mediaType string) (map[string]int, []string) {
 	sourcesMu.Lock()
 	enabled := make([]AddonSource, 0, len(addonSources))
 	for _, src := range addonSources {
@@ -204,18 +205,15 @@ func fetchHashesForItem(imdbID, mediaType string) map[string]int {
 	}
 	sourcesMu.Unlock()
 
-	if len(enabled) == 0 {
-		return nil
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
 	type result struct {
 		hashes map[string]int
+		urls   []string
 	}
 
-	ch := make(chan result, len(enabled))
+	ch := make(chan result, len(enabled)+1)
 
 	for _, src := range enabled {
 		go func(source AddonSource) {
@@ -223,8 +221,6 @@ func fetchHashesForItem(imdbID, mediaType string) map[string]int {
 			base = strings.TrimRight(base, "/")
 			streamURL := fmt.Sprintf("%s/stream/%s/%s.json", base, mediaType, imdbID)
 
-			// Fetch raw JSON directly — do NOT use fetchFromSource/StreamFetcher
-			// because StreamFetcher.Add() filters to HTTP-url streams only, dropping infoHashes.
 			req, err := http.NewRequestWithContext(ctx, "GET", streamURL, nil)
 			if err != nil {
 				ch <- result{}
@@ -245,7 +241,8 @@ func fetchHashesForItem(imdbID, mediaType string) map[string]int {
 				return
 			}
 
-			var hashes map[string]int = make(map[string]int)
+			hashes := make(map[string]int)
+			var urls []string
 
 			for _, stream := range parsed.Streams {
 				title, _ := stream["title"].(string)
@@ -274,14 +271,27 @@ func fetchHashesForItem(imdbID, mediaType string) map[string]int {
 						hashes[hash] = seeders
 					}
 				}
+
+				// Capture HTTP stream URLs for validation
+				if urlStr, ok := stream["url"].(string); ok && urlStr != "" && strings.HasPrefix(urlStr, "http") && !isSuspiciousURL(urlStr) {
+					urls = append(urls, urlStr)
+				}
 			}
-			log.Printf("[Prefetch] 📡 %s → %s: %d hashes", source.Name, streamURL, len(hashes))
-			ch <- result{hashes: hashes}
+			log.Printf("[Prefetch] 📡 %s → %s: %d hashes, %d URLs", source.Name, streamURL, len(hashes), len(urls))
+			ch <- result{hashes: hashes, urls: urls}
 		}(src)
 	}
 
+	// Directly query Debrid Media Manager's global library using Proof-of-Work
+	go func() {
+		hashes := scrapeDMMDirectly(ctx, imdbID, mediaType)
+		ch <- result{hashes: hashes}
+	}()
+
 	allHashes := make(map[string]int)
-	for i := 0; i < len(enabled); i++ {
+	seenURLs := make(map[string]bool)
+	var allURLs []string
+	for i := 0; i < len(enabled)+1; i++ {
 		res := <-ch
 		for h, seeders := range res.hashes {
 			if existing, ok := allHashes[h]; !ok || seeders > existing {
@@ -289,11 +299,17 @@ func fetchHashesForItem(imdbID, mediaType string) map[string]int {
 			}
 			// Limit to 100 hashes total per item to avoid API abuse
 			if len(allHashes) >= 100 {
-				return allHashes
+				return allHashes, allURLs
+			}
+		}
+		for _, u := range res.urls {
+			if !seenURLs[u] {
+				seenURLs[u] = true
+				allURLs = append(allURLs, u)
 			}
 		}
 	}
-	return allHashes
+	return allHashes, allURLs
 }
 
 // checkRDInstantAvailability checks which hashes are instantly available (cached) on RD.
@@ -356,6 +372,108 @@ func checkRDInstantAvailability(hashes []string) (map[string]bool, error) {
 		}
 	}
 	return result, nil
+}
+
+// scrapeDMMDirectly simulates a client querying Debrid Media Manager's search API using PoW
+func scrapeDMMDirectly(ctx context.Context, imdbID, mediaType string) map[string]int {
+	endpoint := "movie"
+	if mediaType == "series" {
+		endpoint = "show"
+	}
+	
+	dmmProblemKey, solution := generateDMMToken()
+	url := fmt.Sprintf("https://debridmediamanager.com/api/torrents/%s?imdbId=%s&dmmProblemKey=%s&solution=%s", endpoint, imdbID, dmmProblemKey, solution)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil
+	}
+	
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("[Prefetch] ⚠️ DMM direct API returned %d", resp.StatusCode)
+		return nil
+	}
+
+	var parsed struct {
+		Results []struct {
+			Hash string `json:"hash"`
+		} `json:"results"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		return nil
+	}
+
+	hashes := make(map[string]int)
+	for _, res := range parsed.Results {
+		h := strings.ToLower(strings.TrimSpace(res.Hash))
+		if h != "" {
+			hashes[h] = 100 // Default fake seeders for DMM
+		}
+	}
+	
+	log.Printf("[Prefetch] 📡 DMM Direct Search -> %s: %d hashes", url, len(hashes))
+	return hashes
+}
+
+func generateHash(str string) string {
+	hash1 := uint32(0xdeadbeef ^ len(str))
+	hash2 := uint32(0x41c6ce57 ^ len(str))
+
+	for i := 0; i < len(str); i++ {
+		charCode := uint32(str[i])
+		hash1 = (hash1 ^ charCode) * 2654435761
+		hash2 = (hash2 ^ charCode) * 1597334677
+		hash1 = (hash1 << 5) | (hash1 >> 27)
+		hash2 = (hash2 << 5) | (hash2 >> 27)
+	}
+
+	hash1 = hash1 + (hash2 * 1566083941)
+	hash2 = hash2 + (hash1 * 2024237689)
+
+	return fmt.Sprintf("%x", hash1^hash2)
+}
+
+func combineHashes(hash1, hash2 string) string {
+	halfLength := len(hash1) / 2
+	firstPart1 := hash1[:halfLength]
+	secondPart1 := hash1[halfLength:]
+	firstPart2 := hash2[:halfLength]
+	secondPart2 := hash2[halfLength:]
+
+	var obfuscated string
+	for i := 0; i < halfLength; i++ {
+		obfuscated += string(firstPart1[i]) + string(firstPart2[i])
+	}
+	
+	obfuscated += reverseString(secondPart2) + reverseString(secondPart1)
+	return obfuscated
+}
+
+func reverseString(s string) string {
+	r := []rune(s)
+	for i, j := 0, len(r)-1; i < j; i, j = i+1, j-1 {
+		r[i], r[j] = r[j], r[i]
+	}
+	return string(r)
+}
+
+func generateDMMToken() (string, string) {
+	salt := "debridmediamanager.com%%fe7#td00rA3vHz%VmI"
+	token := fmt.Sprintf("%x", rand.Uint32())
+	timestamp := time.Now().Unix()
+
+	tokenWithTimestamp := fmt.Sprintf("%s-%d", token, timestamp)
+	tokenTimestampHash := generateHash(tokenWithTimestamp)
+	tokenSaltHash := generateHash(salt + "-" + token)
+
+	return tokenWithTimestamp, combineHashes(tokenTimestampHash, tokenSaltHash)
 }
 
 // addPrefetchLog appends a message to the status log (max 200 entries).
@@ -445,7 +563,25 @@ func runPrefetchJob(ctx context.Context, authKey string, limit int, force bool) 
 		log.Printf("🔍 [Prefetch] Processing: %s [%s]", item.Name, item.ID)
 
 		// 1. Fetch hashes from all enabled addon sources
-		hashes := fetchHashesForItem(item.ID, item.Type)
+		hashes, streamURLs := fetchHashesForItem(item.ID, item.Type)
+
+		// Persist and validate any discovered HTTP stream URLs
+		if len(streamURLs) > 0 {
+			validationQueued := 0
+			for _, u := range streamURLs {
+				if _, err := db.Exec("INSERT INTO stream_urls (url, is_valid, fail_count) VALUES (?, TRUE, 0) ON CONFLICT(url) DO NOTHING", u); err != nil {
+					log.Printf("⚠️ [Prefetch] Failed to insert stream URL: %v", err)
+				}
+				select {
+				case validateCh <- u:
+					validationQueued++
+				default:
+				}
+			}
+			if validationQueued > 0 {
+				log.Printf("🛡️ [Prefetch] Queued %d/%d stream URLs for validation from %s", validationQueued, len(streamURLs), itemLabel)
+			}
+		}
 
 		if len(hashes) == 0 {
 			addPrefetchLog(fmt.Sprintf("⚠️  No hashes found for %s", itemLabel))
