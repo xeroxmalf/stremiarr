@@ -157,32 +157,30 @@ func validateRDLink(targetLink string) {
 		}
 	}
 
-	// 3. Range Probe & Size Check the .download.real-debrid.com URL
-	if strings.Contains(downloadURL, ".download.real-debrid.com") {
-		log.Printf("[Validation] 📏 Size probing URL: %s", downloadURL)
+	// 3. Range Probe & Size Check the final download URL
+	log.Printf("[Validation] 📏 Size probing URL: %s", downloadURL)
 
-		size := probeFileSize(downloadURL)
+	size := probeFileSize(downloadURL)
 
-		// 🛑 RD "Provider Unavailable" Video Size Check
-		if size > 0 && size < 25000000 {
-			log.Printf("[Validation] 🚫 RD Error Video detected (%d bytes). Redacting: %s", size, targetLink)
-			if _, err := db.Exec("UPDATE stream_urls SET is_valid = FALSE, last_validated = ? WHERE url = ?", time.Now(), targetLink); err != nil {
-				log.Printf("⚠️ Failed to update stream valid state: %v", err)
-			}
-			return
-		} else if size > 0 {
-			log.Printf("[Validation] ✅ Range probe successful (%d bytes) for: %s", size, targetLink)
-			if _, err := db.Exec("UPDATE stream_urls SET is_valid = TRUE, last_validated = ? WHERE url = ?", time.Now(), targetLink); err != nil {
-				log.Printf("⚠️ Failed to update stream valid state: %v", err)
-			}
-			return
-		} else {
-			if _, err := db.Exec("UPDATE stream_urls SET is_valid = FALSE, last_validated = ? WHERE url = ?", time.Now(), targetLink); err != nil {
-				log.Printf("⚠️ Failed to update stream valid state: %v", err)
-			}
-			log.Printf("[Validation] 🚫 Range probe failed & redacted silently: %s", targetLink)
-			return
+	// 🛑 "Provider Unavailable" / Error Video Size Check
+	if size > 0 && size < 25000000 {
+		log.Printf("[Validation] 🚫 Error Video detected (%d bytes). Redacting: %s", size, targetLink)
+		if _, err := db.Exec("UPDATE stream_urls SET is_valid = FALSE, last_validated = ? WHERE url = ?", time.Now(), targetLink); err != nil {
+			log.Printf("⚠️ Failed to update stream valid state: %v", err)
 		}
+		return
+	} else if size > 0 {
+		log.Printf("[Validation] ✅ Range probe successful (%d bytes) for: %s", size, targetLink)
+		if _, err := db.Exec("UPDATE stream_urls SET is_valid = TRUE, last_validated = ? WHERE url = ?", time.Now(), targetLink); err != nil {
+			log.Printf("⚠️ Failed to update stream valid state: %v", err)
+		}
+		return
+	} else {
+		if _, err := db.Exec("UPDATE stream_urls SET is_valid = FALSE, last_validated = ? WHERE url = ?", time.Now(), targetLink); err != nil {
+			log.Printf("⚠️ Failed to update stream valid state: %v", err)
+		}
+		log.Printf("[Validation] 🚫 Range probe failed & redacted silently: %s", targetLink)
+		return
 	}
 
 	log.Printf("[Validation] ✅ Validation complete and successful for: %s", targetLink)

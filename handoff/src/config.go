@@ -34,10 +34,12 @@ type AddonSource struct {
 
 var (
 	addonSources = []AddonSource{
-		{Name: "Comet", URL: "https://comet.feels.legal/manifest.json", Enabled: true},
+		{Name: "Comet (Local - DMM Search)", URL: "http://comet:8000/manifest.json", Enabled: true},
+		{Name: "Comet (Public)", URL: "https://comet.feels.legal/manifest.json", Enabled: true},
 		{Name: "TorrentIO", URL: "https://torrentio.strem.fun/manifest.json", Enabled: true},
 		{Name: "MediaFusion", URL: "https://mediafusion.elfhosted.com/manifest.json", Enabled: true},
 		{Name: "StremThru", URL: "https://stremthru.13377001.xyz/manifest.json", Enabled: true},
+		{Name: "DMM Cast", URL: "https://debridmediamanager.com/api/stremio/a514a2e420c02f0a53565b3578502b9f36281a258aacc4cf3be9d1670eb9864b/manifest.json", Enabled: true},
 	}
 	sourcesMu sync.Mutex
 )

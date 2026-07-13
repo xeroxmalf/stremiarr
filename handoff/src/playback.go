@@ -241,7 +241,6 @@ func playHandler(w http.ResponseWriter, r *http.Request, conf Config) {
 	}
 	if filename == "" || filename == "/" {
 		log.Printf("[Play] ⏭️ Non-Debrid link or parse failure. Bypassing proxy and redirecting Stremio.")
-		recordStrike(targetLink)
 		metricStreamsPlayed.Inc()
 		w.Header().Set("Location", finalURL)
 		w.WriteHeader(http.StatusFound)

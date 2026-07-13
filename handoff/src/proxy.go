@@ -263,8 +263,6 @@ func serveStreamsJSON(w http.ResponseWriter, r *http.Request, body []byte, idOrC
 	wrappedCount := 0
 	redactedCount := 0
 	seenURLs := make(map[string]struct{})
-	const maxStreams = 30 // cap to reduce noise and improve UX
-
 	if streams, ok := result["streams"].([]interface{}); ok {
 		var finalStreams []interface{}
 
@@ -274,11 +272,6 @@ func serveStreamsJSON(w http.ResponseWriter, r *http.Request, body []byte, idOrC
 		}
 
 		for _, s := range streams {
-			if wrappedCount >= maxStreams {
-				redactedCount++
-				break
-			}
-
 			stream, ok := s.(map[string]interface{})
 			if !ok {
 				finalStreams = append(finalStreams, s)
@@ -316,12 +309,6 @@ func serveStreamsJSON(w http.ResponseWriter, r *http.Request, body []byte, idOrC
 			var lastValidated time.Time
 			err := db.QueryRow("SELECT fail_count, success_count, is_valid, last_validated FROM stream_urls WHERE url = ?", urlStr).Scan(&failCount, &successCount, &isValid, &lastValidated)
 
-			// Consider a stream "stale" if last validated > 30 minutes ago
-			stale := false
-			if err == nil && !lastValidated.IsZero() && time.Since(lastValidated) > 30*time.Minute {
-				stale = true
-			}
-
 			if err == nil {
 				// Hard block if too many strikes
 				if failCount >= 3 {
@@ -332,12 +319,6 @@ func serveStreamsJSON(w http.ResponseWriter, r *http.Request, body []byte, idOrC
 				// Hard block if explicitly marked invalid
 				if !isValid {
 					log.Printf("[Stream] ✂️  Redacting stream (Invalid/Dead): %s", urlStr)
-					redactedCount++
-					continue
-				}
-				// If stale AND already had some strikes, treat as suspect
-				if stale && failCount > 0 {
-					log.Printf("[Stream] ✂️  Redacting stream (stale + prior strikes): %s", urlStr)
 					redactedCount++
 					continue
 				}

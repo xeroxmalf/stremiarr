@@ -102,18 +102,27 @@ func runMigrations() {
 		log.Fatalf("❌ Failed to query current schema version: %v", err)
 	}
 
+	bandwidthLogTable := `CREATE TABLE IF NOT EXISTS bandwidth_log (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		bytes INTEGER NOT NULL,
+		source TEXT NOT NULL,
+		timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);`
+	if db.isPg {
+		bandwidthLogTable = `CREATE TABLE IF NOT EXISTS bandwidth_log (
+			id SERIAL PRIMARY KEY,
+			bytes INTEGER NOT NULL,
+			source TEXT NOT NULL,
+			timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		);`
+	}
+
 	migrations := []string{
 		`CREATE TABLE IF NOT EXISTS stream_cache (
 			request_id TEXT PRIMARY KEY,
 			streams_json TEXT NOT NULL,
-			updated_at DATETIME NOT NULL
-		);
-		CREATE TABLE IF NOT EXISTS bandwidth_log (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			bytes INTEGER NOT NULL,
-			source TEXT NOT NULL,
-			timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-		);`,
+			updated_at TIMESTAMP NOT NULL
+		);` + "\n" + bandwidthLogTable,
 		`CREATE TABLE IF NOT EXISTS stream_urls (
             url TEXT PRIMARY KEY,
             is_valid BOOLEAN DEFAULT TRUE,
