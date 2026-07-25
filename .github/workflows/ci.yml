@@ -45,7 +45,7 @@ jobs:
           go build -v -o /dev/null ./...
 
       - name: Upload coverage reports
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: go-coverage
           path: handoff/src/coverage.out
