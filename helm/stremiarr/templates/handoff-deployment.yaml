@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "stremiarr.fullname" . }}-handoff
+  labels:
+    {{- include "stremiarr.labels" . | nindent 4 }}
+    app.kubernetes.io/component: handoff
+spec:
+  replicas: {{ .Values.handoff.replicas }}
+  selector:
+    matchLabels:
+      {{- include "stremiarr.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: handoff
+  template:
+    metadata:
+      labels:
+        {{- include "stremiarr.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: handoff
+    spec:
+      {{- if .Values.global.hostNetwork }}
+      hostNetwork: true
+      {{- end }}
+      containers:
+        - name: handoff
+          image: "{{ .Values.handoff.image.repository }}:{{ .Values.handoff.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.handoff.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.handoff.port }}
+              protocol: TCP
+          env:
+            {{- toYaml .Values.handoff.env | nindent 12 }}
+          resources:
+            {{- toYaml .Values.handoff.resources | nindent 12 }}

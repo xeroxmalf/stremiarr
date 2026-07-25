@@ -1,3 +1,9 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
 services:
   caddy:
     container_name: caddy
@@ -30,11 +36,7 @@ services:
       nofile:
         soft: 1048576
         hard: 1048576
-    logging:
-      driver: json-file
-      options:
-        max-size: "20m"
-        max-file: "5"
+    logging: *default-logging
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:2019/metrics || exit 1"]
       interval: 10s
@@ -53,11 +55,7 @@ services:
     volumes:
       - ../rclone:/config/rclone
       - ../rclone/cache:/data/cache
-    logging:
-      driver: json-file
-      options:
-        max-size: "20m"
-        max-file: "5"
+    logging: *default-logging
     command: [
       "serve", "http", "real-debrid-dav:/",
       "--addr", "127.0.0.1:9933",
@@ -111,11 +109,7 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
-    logging:
-      driver: json-file
-      options:
-        max-size: "20m"
-        max-file: "5"
+    logging: *default-logging
     environment:
       - PORT=9944
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
@@ -144,11 +138,7 @@ services:
     shm_size: 4gb
     restart: always
     stop_grace_period: 30s
-    logging:
-      driver: json-file
-      options:
-        max-size: "20m"
-        max-file: "5"
+    logging: *default-logging
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=${POSTGRES_PASS}
@@ -198,11 +188,7 @@ services:
       postgres:
         condition: service_healthy
     restart: always
-    logging:
-      driver: json-file
-      options:
-        max-size: "20m"
-        max-file: "5"
+    logging: *default-logging
     environment:
       - SCRAPE_NYAA=both
       - SCRAPE_SEADEX=both

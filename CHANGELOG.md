@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **CI/CD Pipeline Overhaul:** Fixed Go version alignment (1.22 → 1.24), added `golangci-lint` static analysis, test coverage reporting with artifact uploads, and Dependabot for automated dependency updates (Go modules, GitHub Actions, Docker images).
+- **Comprehensive Documentation:** Added `CONTRIBUTING.md` (development guide), `SECURITY.md` (vulnerability reporting policy), `docs/api_reference.md` (full Handoff REST API reference with 20+ endpoints), and GitHub issue/PR templates.
+- **Go Tooling:** Added `handoff/src/Makefile` (build, test, lint, coverage targets), `.golangci.yml` (linter configuration), and `.editorconfig` (project-wide formatting standards).
+- **Helm Chart:** Fleshed out Kubernetes Helm chart from bare scaffold to functional deployment with `values.yaml`, `.helmignore`, and 6 templates (Handoff Deployment/Service, PostgreSQL StatefulSet/Service, Secrets, helpers).
+- **Root Makefile:** Added project-level `Makefile` for one-command operations (`make deploy`, `make ci`, `make health`, etc.).
+- **MIT License:** Added explicit `LICENSE` file.
 - **Postgres DB Abstraction:** Developed `DBWrapper` allowing seamless injection of standard PostgreSQL database drivers over SQLite, meeting Phase 3 roadmap constraints for high-availability setups.
 - **Dynamic Persistent Scraper Plugins:** Integrated native webhooks into `config.go` and `api.go` enabling users to instantly inject remote Stremio Addons as standalone plugins, persisted to JSON, satisfying the plugin system roadmap requirement.
 - **Smart Library Prefetcher:** A dedicated background worker (`prefetch.go`) that scans the Stremio library, aggregates hashes from all enabled addons, and selectively queues them for caching on Real-Debrid.
@@ -20,10 +26,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Local Plex Support (Optional Stack):** Integrated an optional Zurg + Rclone FUSE mount + Plex Media Server compose stack. This allows Plex to seamlessly scan and play the Real-Debrid library managed by Handoff and Zurg.
 
 ### Changed
+- **Docker Compose DRY Refactor:** Introduced `x-logging` YAML anchor to eliminate 5 duplicate logging configuration blocks.
+- **Dockerfile Security:** Added non-root user, `ca-certificates`, and OCI image labels to Handoff container.
+- **README Overhaul:** Added CI/Go/License/Docker badges, project structure tree, Make commands reference, development section, and documentation links.
+- **`.gitignore` Expansion:** Added patterns for IDE files, Go coverage, Docker artifacts, Plex, Zurg, and mount points.
 - **Massive Codebase Refactor:** The massive legacy `main.go` file inside Handoff has been successfully modularized into dedicated domain packages (`debrid.go`, `proxy.go`, `api.go`, `handlers.go`, `prefetch.go`, `playback.go`, etc.) for significantly improved maintainability.
 - **Stream Auto-Queuing:** Uncached streams clicked directly in Stremio now enforce the same `seeder >= 5` logic before being submitted to Real-Debrid.
 
 ### Fixed
+- **CI Go Version Mismatch:** Root CI workflow used Go 1.22 while the project requires Go 1.24.
+- **Handoff CI Branch:** `handoff/.github/workflows/ci.yml` triggered on `master` instead of `main`.
+- **`docker_prune.sh` Invalid Flags:** Removed conflicting `--all -a` flags that caused overly aggressive image deletion.
+- **Unreachable Code:** Removed dead code at the end of `validateRDLink()` in `validation.go`.
+- **Metadata Mock Values:** Replaced hardcoded fake IMDB/Rotten Tomatoes scores in `metadata.go` with a safe no-op stub.
+- **Performance Tuning Docs:** Updated outdated PostgreSQL values to match actual `docker-compose.yml` configuration (shared_buffers 1GB→4GB, effective_cache_size 3GB→11GB).
 - **Compose Mount Contexts:** Fixed a critical bug in `docker-compose.yml` where `rclone`, `handoff`, and `comet` volume/build contexts were pointing to relative `./` paths inside the `compose/` directory instead of the project root `../`, causing fresh deployments to map to empty directories.
 - **API Parsing Crashes:** Handled a fatal `json: cannot unmarshal string into Go value` crash that occurred when the Real-Debrid `/instantAvailability` endpoint returned the string "Invalid hash" instead of a valid JSON array.
 - **Memory Leaks:** Fixed `catalogCache` memory bloat where abandoned or one-off Stremio catalogs would stay in memory indefinitely by implementing an active background eviction ticker.

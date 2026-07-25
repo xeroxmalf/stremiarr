@@ -37,7 +37,7 @@ func handleOAuthLogin(w http.ResponseWriter, r *http.Request) {
 	})
 
 	redirect := authURL + "?client_id=" + clientID + "&redirect_uri=" + redirectURI + "&response_type=code&scope=openid profile email&state=" + state
-	
+
 	log.Printf("🔑 Redirecting user to OAuth Provider: %s", authURL)
 	http.Redirect(w, r, redirect, http.StatusTemporaryRedirect)
 }
@@ -52,7 +52,7 @@ func handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("🔑 OAuth Callback received. Authenticating user...")
-	
+
 	// Issue a mock successful admin token for demonstration purposes
 	http.SetCookie(w, &http.Cookie{
 		Name:     "stremiarr_session",
@@ -60,6 +60,6 @@ func handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		HttpOnly: true,
 	})
-	
+
 	http.Redirect(w, r, "/ui", http.StatusTemporaryRedirect)
 }

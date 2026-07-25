@@ -1,0 +1,9 @@
+{
+  "myalias": {
+    "addon_url": "https://test.addon/manifest.json",
+    "torrentio_url": "",
+    "mediafusion_url": "",
+    "stremthru_url": "",
+    "plugins": null
+  }
+}

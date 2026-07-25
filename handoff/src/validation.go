@@ -182,9 +182,4 @@ func validateRDLink(targetLink string) {
 		log.Printf("[Validation] 🚫 Range probe failed & redacted silently: %s", targetLink)
 		return
 	}
-
-	log.Printf("[Validation] ✅ Validation complete and successful for: %s", targetLink)
-	if _, err := db.Exec("UPDATE stream_urls SET is_valid = TRUE, last_validated = ? WHERE url = ?", time.Now(), targetLink); err != nil {
-		log.Printf("⚠️ Failed to update stream valid state: %v", err)
-	}
 }

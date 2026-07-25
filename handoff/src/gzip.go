@@ -25,7 +25,7 @@ func gzipMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			next(w, r)
 			return
 		}
-		
+
 		// Skip compression for video streams and WebSockets
 		if strings.Contains(r.URL.Path, "/transcode") || strings.Contains(r.URL.Path, "/play/") || strings.Contains(r.URL.Path, "/ws") {
 			next(w, r)

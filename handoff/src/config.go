@@ -19,9 +19,9 @@ func init() {
 }
 
 type Config struct {
-	AddonURL       string `json:"addon_url"`
-	TorrentioURL   string `json:"torrentio_url"`
-	MediafusionURL string `json:"mediafusion_url"`
+	AddonURL       string   `json:"addon_url"`
+	TorrentioURL   string   `json:"torrentio_url"`
+	MediafusionURL string   `json:"mediafusion_url"`
 	StremthruURL   string   `json:"stremthru_url"`
 	Plugins        []string `json:"plugins"` // Webhook URLs for modifying streams
 }

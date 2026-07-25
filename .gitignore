@@ -26,3 +26,32 @@ handoff/src/handoff
 # OS files
 .DS_Store
 Thumbs.db
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Go test/coverage
+*.out
+coverage.html
+
+# Docker
+.docker/
+
+# Plex data
+plex/
+
+# Zurg data
+zurg/data/
+
+# Rclone cache
+rclone/cache/
+
+# Mount points
+mnt/
+
+# Backup directories
+.backups/

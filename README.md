@@ -1,8 +1,31 @@
 # 🚀 Stremiarr
 
+![CI](https://github.com/xeroxmalf/stremiarr/actions/workflows/ci.yml/badge.svg)
+![Go](https://img.shields.io/badge/Go-1.24-00ADD8?logo=go)
+![License](https://img.shields.io/badge/License-MIT-green)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker)
+
 **Stremiarr** is a production-grade, self-hosted media streaming infrastructure stack. It is designed to provide a high-performance, resilient pipeline for torrent discovery and streaming, specifically optimized for **Real-Debrid** integration with a focus on **zero-stutter playback**.
 
 Unlike simple standalone applications, Stremiarr orchestrates a suite of specialized services to handle the entire lifecycle of a stream—from discovery to secure proxying and aggressive caching.
+
+---
+
+## 🚀 Why Stremiarr?
+
+Stremiarr is built for users who want a **"set it and forget it"** production environment. By decoupling the scraper (Comet) from the delivery mechanism (Rclone/Handoff), it ensures that even if one indexer is down, your streaming pipeline remains fast and stable. It is the ultimate "Arr" equivalent for those who prefer the speed of Debrid over local storage.
+
+---
+
+## 📋 Prerequisites
+
+Before you begin, ensure you have the following installed:
+- [Docker](https://docs.docker.com/get-docker/) (v20.10+)
+- [Docker Compose](https://docs.docker.com/compose/install/) (v2.0+)
+- [Go](https://go.dev/doc/install) (1.24+)
+- `make` utility
+- A Cloudflare account and API Token (for DNS-01 TLS).
+- A Real-Debrid account and API Key.
 
 ---
 
@@ -18,58 +41,22 @@ The stack is orchestrated via **Docker Compose** and utilizes a "Host Networking
 
 ---
 
-## 🛠️ Key Features
+## 📁 Project Structure
 
-*   **Production-Ready CI/CD**: Includes over 20 management scripts for validating Compose files, Caddy syntax, upstream connectivity, and security.
-*   **Infrastructure as Code**: The entire stack is portable, using relative pathing and environment variables.
-*   **Drift Detection**: A snapshotting system allows you to baseline "known-good" configurations and detect/rollback unintended changes.
-*   **Observability**: Integrated health-check scripts designed for 5-minute cron intervals with webhook alerting capabilities.
-*   **Optimized Performance**: Pre-configured Postgres tuning, Go memory limits, and Rclone VFS flags specifically tailored for 4K streaming.
-
----
-
-## 🚀 Quick Start
-
-### 1. Prerequisites
-- Docker & Docker Compose installed.
-- A Cloudflare account and API Token (for DNS-01 TLS).
-- A Real-Debrid account and API Key.
-
-### 2. Configuration
-Clone this repository and set up your environment:
-
-```bash
-cp compose/.env.example compose/.env
-# Edit compose/.env with your secrets
-nano compose/.env
-```
-
-Edit `caddy/Caddyfile` to replace `yourdomain.com` with your actual domain.
-Edit `rclone/rclone.conf` with your Real-Debrid path/credentials.
-
-### 3. Deployment
-
-```bash
-# Run CI checks (optional but recommended)
-./scripts/ci.sh
-
-# Deploy the stack
-./scripts/deploy.sh
+```text
+.
+├── cmd/                # Main applications for this project
+├── internal/           # Private application and library code
+├── pkg/                # Library code that's ok to use by external applications
+├── docker-compose.yml  # Docker Compose definition for the stack
+├── Makefile            # Build and management tasks
+├── helm/               # Helm charts for Kubernetes deployment
+└── docs/               # Documentation
 ```
 
 ---
 
-## 🛠️ Management
-
-- **Status**: `./scripts/status.sh`
-- **Logs**: `./scripts/logs.sh <service>`
-- **Backup**: `./scripts/backup.sh`
-- **Snapshot**: `./scripts/snapshot.sh` (Saves a "known-good" config state)
-- **Health Watch**: `./scripts/health_watch.sh` (Can be set as a cron job)
-
----
-
-## 📦 Service Overview
+## 🛠️ Service Overview
 
 | Service | Purpose | Port |
 | :--- | :--- | :--- |
@@ -83,11 +70,41 @@ Edit `rclone/rclone.conf` with your Real-Debrid path/credentials.
 
 ---
 
-## 🚀 Why Stremiarr?
+## 🚀 Make Commands
 
-Stremiarr is built for users who want a **"set it and forget it"** production environment. By decoupling the scraper (Comet) from the delivery mechanism (Rclone/Handoff), it ensures that even if one indexer is down, your streaming pipeline remains fast and stable. It is the ultimate "Arr" equivalent for those who prefer the speed of Debrid over local storage.
+The project includes a Makefile with several helpful commands:
+
+- `make build`: Build the Go binaries
+- `make test`: Run all tests
+- `make run`: Run the Handoff service locally
+- `make docker-build`: Build Docker images
+- `make docker-up`: Start the complete stack using Docker Compose
+- `make docker-down`: Stop and remove the Docker stack
+- `make lint`: Run golangci-lint
+
+---
+
+## 👨‍💻 Development
+
+If you want to contribute to Stremiarr, please start by reading our [CONTRIBUTING.md](./CONTRIBUTING.md).
+
+For local development:
+1. Clone the repository
+2. Run `make build` to verify the code compiles
+3. Run `make test` to ensure tests pass
+4. Use `make docker-up` to bring up the supporting services
+
+---
+
+## 📄 Further Documentation
+
+- [CONTRIBUTING.md](./CONTRIBUTING.md) - Guidelines for contributing
+- [CHANGELOG.md](./CHANGELOG.md) - Version history and updates
+- [ROADMAP.md](./ROADMAP.md) - Future plans and features
+- [SECURITY.md](./SECURITY.md) - Security policies and reporting
 
 ---
 
 ## ⚖️ License
+
 MIT

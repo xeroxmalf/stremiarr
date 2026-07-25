@@ -1,7 +1,6 @@
 FROM golang:1.24-alpine AS builder
 WORKDIR /app
 
-
 # Copy go.mod and go.sum first to leverage Docker cache for dependencies
 COPY go.mod go.sum ./
 RUN go mod download
@@ -17,10 +16,17 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 FROM alpine:latest
 WORKDIR /app
 
-# Add tzdata
-RUN apk add --no-cache tzdata
+LABEL org.opencontainers.image.source="https://github.com/stremiarr/stremiarr"
+LABEL org.opencontainers.image.description="Stremiarr Handoff"
 
-COPY --from=builder /app/handoff .
+# Add tzdata and ca-certificates
+RUN apk add --no-cache tzdata ca-certificates
+
+# Add non-root user
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+USER appuser
+
+COPY --from=builder --chown=appuser:appgroup /app/handoff .
 
 # The application uses /data for the streams.db and keys.json
 VOLUME ["/data"]

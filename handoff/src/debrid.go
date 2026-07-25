@@ -1,6 +1,5 @@
 package main
 
-
 import (
 	"bytes"
 	"encoding/json"
@@ -121,7 +120,6 @@ type unrestrictCacheEntry struct {
 }
 
 var globalUnrestrictCache sync.Map
-
 
 type DebridProvider interface {
 	Name() string

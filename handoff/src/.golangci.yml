@@ -1,0 +1,31 @@
+run:
+  timeout: 5m
+
+linters:
+  disable-all: true
+  enable:
+    - govet
+    - errcheck
+    - staticcheck
+    - ineffassign
+    - gosimple
+    - unused
+    - typecheck
+    - gocritic
+    - gofmt
+    - lll
+  disable:
+    - exhaustive
+    - exhaustruct
+    - wrapcheck
+
+issues:
+  max-same-issues: 0
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck
+
+linters-settings:
+  lll:
+    line-length: 150

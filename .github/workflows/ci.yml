@@ -16,7 +16,9 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.24'
+          cache: true
+          cache-dependency-path: handoff/src/go.sum
 
       - name: Initialize Go Module
         run: |
@@ -26,15 +28,27 @@ jobs:
           fi
           go mod tidy
 
-      - name: Run Unit Tests
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          working-directory: handoff/src
+
+      - name: Run Unit Tests with Coverage
         run: |
           cd handoff/src
-          go test -v ./...
+          go test -v -coverprofile=coverage.out -covermode=atomic ./...
 
       - name: Verify Build
         run: |
           cd handoff/src
-          go build -v -o /dev/null main.go
+          go build -v -o /dev/null ./...
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-coverage
+          path: handoff/src/coverage.out
 
   validate-configs:
     name: Validate Configs & Scripts

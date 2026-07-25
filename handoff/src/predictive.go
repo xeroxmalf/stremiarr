@@ -23,9 +23,9 @@ func PredictivePreCache(videoID string) {
 
 	nextEpisode := episode + 1
 	nextVideoID := fmt.Sprintf("%s:%d:%d", imdbID, season, nextEpisode)
-	
+
 	log.Printf("🔮 Predictive Pre-Caching: User is looking at %s, triggering background scan for %s", videoID, nextVideoID)
-	
+
 	go func() {
 		// Discover hashes for next episode
 		hashes, streamURLs := fetchHashesForItem(nextVideoID, "series")

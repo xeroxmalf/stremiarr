@@ -1,4 +1,16 @@
 apiVersion: v2
 name: stremiarr
-description: Helm chart for Stremiarr Ecosystem
+description: Helm chart for the Stremiarr media streaming infrastructure stack
+type: application
 version: 0.1.0
+appVersion: "1.0.0"
+maintainers:
+  - name: Stremiarr Maintainer
+keywords:
+  - streaming
+  - media
+  - real-debrid
+  - stremio
+home: https://github.com/xeroxmalf/stremiarr
+sources:
+  - https://github.com/xeroxmalf/stremiarr

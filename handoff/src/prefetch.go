@@ -18,8 +18,8 @@ import (
 
 // LibraryItem represents an item in the Stremio user library.
 type LibraryItem struct {
-	ID      string `json:"_id"`   // IMDB ID e.g. tt1234567
-	Type    string `json:"type"`  // "movie" or "series"
+	ID      string `json:"_id"`  // IMDB ID e.g. tt1234567
+	Type    string `json:"type"` // "movie" or "series"
 	Name    string `json:"name"`
 	Removed bool   `json:"removed"`
 }
@@ -51,7 +51,7 @@ var (
 	prefetchHistoryMu sync.Mutex
 )
 
-func getStremioAuthPath() string { return DataDir + "/stremio_auth.json" }
+func getStremioAuthPath() string     { return DataDir + "/stremio_auth.json" }
 func getPrefetchHistoryPath() string { return DataDir + "/prefetch_history.json" }
 
 func loadPrefetchHistory() {
@@ -248,7 +248,7 @@ func fetchHashesForItem(imdbID, mediaType string) (map[string]int, []string) {
 				title, _ := stream["title"].(string)
 				name, _ := stream["name"].(string)
 				fullText := title + "\n" + name
-				
+
 				seeders := -1 // Default to unknown
 				m := seederRegex.FindStringSubmatch(fullText)
 				if len(m) > 1 {
@@ -363,7 +363,7 @@ func checkRDInstantAvailability(hashes []string) (map[string]bool, error) {
 				result[lh] = false
 				continue
 			}
-			
+
 			if rdArr, ok := valMap["rd"].([]interface{}); ok && len(rdArr) > 0 {
 				result[lh] = true
 			} else {
@@ -380,7 +380,7 @@ func scrapeDMMDirectly(ctx context.Context, imdbID, mediaType string) map[string
 	if mediaType == "series" {
 		endpoint = "show"
 	}
-	
+
 	dmmProblemKey, solution := generateDMMToken()
 	url := fmt.Sprintf("https://debridmediamanager.com/api/torrents/%s?imdbId=%s&dmmProblemKey=%s&solution=%s", endpoint, imdbID, dmmProblemKey, solution)
 
@@ -388,7 +388,7 @@ func scrapeDMMDirectly(ctx context.Context, imdbID, mediaType string) map[string
 	if err != nil {
 		return nil
 	}
-	
+
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil
@@ -417,7 +417,7 @@ func scrapeDMMDirectly(ctx context.Context, imdbID, mediaType string) map[string
 			hashes[h] = 100 // Default fake seeders for DMM
 		}
 	}
-	
+
 	log.Printf("[Prefetch] 📡 DMM Direct Search -> %s: %d hashes", url, len(hashes))
 	return hashes
 }
@@ -451,7 +451,7 @@ func combineHashes(hash1, hash2 string) string {
 	for i := 0; i < halfLength; i++ {
 		obfuscated += string(firstPart1[i]) + string(firstPart2[i])
 	}
-	
+
 	obfuscated += reverseString(secondPart2) + reverseString(secondPart1)
 	return obfuscated
 }
@@ -645,7 +645,7 @@ func runPrefetchJob(ctx context.Context, authKey string, limit int, force bool) 
 					if strings.Contains(err.Error(), "429") {
 						addPrefetchLog("⏳ RD Rate Limited (429). Pausing for 5 minutes...")
 						log.Printf("⏳ [Prefetch] RD Rate Limited (429). Pausing for 5 minutes...")
-						
+
 						// Backoff for 5 minutes, but wake up if cancelled
 						select {
 						case <-ctx.Done():
@@ -659,7 +659,7 @@ func runPrefetchJob(ctx context.Context, authKey string, limit int, force bool) 
 					// Some other error, just skip
 					continue
 				}
-				
+
 				submittedCount++
 			}
 		}

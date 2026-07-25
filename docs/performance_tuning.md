@@ -15,9 +15,20 @@ The Rclone instance (which caches chunks from Real-Debrid) is the bottleneck for
 ## PostgreSQL Tuning for Comet Scraper
 Comet relies heavily on Postgres for tracking metadata. 
 In your `docker-compose.yml`, the Postgres container has optimized `command` arguments:
-- `-c shared_buffers=1GB` (Increase if you have >4GB RAM)
-- `-c effective_cache_size=3GB`
+- `-c shared_buffers=4GB` (Increase if you have >4GB RAM)
+- `-c effective_cache_size=11GB`
+- `-c work_mem=64MB`
+- `-c maintenance_work_mem=1GB`
 - `-c max_connections=200`
+
+## Handoff Connection Pooling
+Handoff optimizes database and backend interactions through connection pooling:
+- `MaxOpenConns=25`
+- `MaxIdleConns=5`
+
+## HTTP Client Tuning
+To ensure robust upstream fetching from addons and Stremio services:
+- `MaxIdleConnsPerHost=20` (or `32` for heavier setups)
 
 ## Prometheus Metrics
 Handoff exposes native Prometheus metrics at `http://<host>:9944/metrics`.

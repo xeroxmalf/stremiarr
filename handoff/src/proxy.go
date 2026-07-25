@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	seederRegex = regexp.MustCompile(`(?i)(?:👤|seeders:|s:|s\s+|seeders\s+)\s*(\d+)`)
+	seederRegex          = regexp.MustCompile(`(?i)(?:👤|seeders:|s:|s\s+|seeders\s+)\s*(\d+)`)
 	globalBlacklistRegex *regexp.Regexp
 )
 
@@ -63,7 +63,7 @@ func fetchFromSource(ctx context.Context, url string) (StreamFetcher, error) {
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
-	
+
 	// Track bandwidth usage
 	TrackBandwidth(len(body), url)
 
@@ -155,7 +155,7 @@ func fetchAndCacheStreams(targetURL string, config Config) ([]byte, error) {
 	// Deduplicate streams
 	seenURLs := make(map[string]bool)
 	var deduped []interface{}
-	
+
 	// Phase 5: Blacklist filtering (using global compiled regex)
 
 	for _, s := range allFetcher.Streams {
@@ -364,7 +364,7 @@ func serveStreamsJSON(w http.ResponseWriter, r *http.Request, body []byte, idOrC
 						title, _ := m["title"].(string)
 						name, _ := m["name"].(string)
 						fullText := title + "\n" + name
-						
+
 						seeders := 0
 						matches := seederRegex.FindStringSubmatch(fullText)
 						if len(matches) > 1 {

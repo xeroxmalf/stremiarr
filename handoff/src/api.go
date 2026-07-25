@@ -255,7 +255,7 @@ func serveAPIMappings(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
 			return
 		}
-		
+
 		addonURL := strings.TrimSpace(req.AddonURL)
 		if addonURL == "" {
 			w.WriteHeader(http.StatusBadRequest)
@@ -417,8 +417,8 @@ func serveAPIStremioAuth(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			w.WriteHeader(http.StatusUnauthorized)
 			if _, err := w.Write([]byte(fmt.Sprintf(`{"error":%q}`, err.Error()))); err != nil {
-			log.Printf("⚠️ Failed to write error response: %v", err)
-		}
+				log.Printf("⚠️ Failed to write error response: %v", err)
+			}
 			return
 		}
 

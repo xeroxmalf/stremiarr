@@ -1,0 +1,73 @@
+global:
+  hostNetwork: true
+  logLevel: "info"
+
+handoff:
+  image:
+    repository: xeroxmalf/handoff
+    tag: latest
+    pullPolicy: IfNotPresent
+  port: 8080
+  replicas: 1
+  resources: {}
+  env:
+    - name: HANDOFF_PORT
+      value: "8080"
+    - name: POSTGRES_URL
+      value: "postgres://user:password@stremiarr-postgres:5432/handoff?sslmode=disable"
+
+postgres:
+  image:
+    repository: postgres
+    tag: "15-alpine"
+    pullPolicy: IfNotPresent
+  port: 5432
+  resources: {}
+  storage:
+    size: "5Gi"
+    storageClass: ""
+  credentials:
+    user: "user"
+    password: "password"
+    database: "handoff"
+
+comet:
+  image:
+    repository: some/comet
+    tag: latest
+    pullPolicy: IfNotPresent
+  port: 8000
+  env: []
+
+caddy:
+  image:
+    repository: caddy
+    tag: latest
+    pullPolicy: IfNotPresent
+  resources: {}
+
+rclone:
+  image:
+    repository: rclone/rclone
+    tag: latest
+    pullPolicy: IfNotPresent
+  cacheSize: "250Gi"
+  resources: {}
+
+cloudflared:
+  enabled: false
+  tunnelToken: ""
+
+zurg:
+  enabled: false
+  image:
+    repository: ghcr.io/debridmediamanager/zurg-testing
+    tag: latest
+  token: ""
+
+plex:
+  enabled: false
+  image:
+    repository: lscr.io/linuxserver/plex
+    tag: latest
+  claimToken: ""

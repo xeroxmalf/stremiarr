@@ -112,13 +112,13 @@ func TestStremioE2EWorkflow(t *testing.T) {
 	rrPlay := httptest.NewRecorder()
 	handoffHandler.ServeHTTP(rrPlay, reqPlay)
 
-	// Since "fake.provider.com" isn't a known Debrid host, Handoff will follow redirects 
+	// Since "fake.provider.com" isn't a known Debrid host, Handoff will follow redirects
 	// (which fails because fake.provider.com doesn't exist), then it will ultimately issue a 302 Found
 	// to redirect the client to the native finalURL.
 	if rrPlay.Code != http.StatusFound {
 		t.Fatalf("Step 4 Failed: Expected 302 Redirect to bypass non-debrid link, got %d. Body: %s", rrPlay.Code, rrPlay.Body.String())
 	}
-	
+
 	loc := rrPlay.Header().Get("Location")
 	if loc != "http://fake.provider.com/download.mp4" {
 		t.Fatalf("Step 4 Failed: Expected redirection to original link, got %s", loc)

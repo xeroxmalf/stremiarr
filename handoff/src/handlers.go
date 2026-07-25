@@ -53,7 +53,7 @@ func routeHandler(w http.ResponseWriter, r *http.Request) {
 	path := strings.Trim(r.URL.Path, "/")
 	parts := strings.Split(path, "/")
 
-	if path == "generate" || path == "ui" {
+	if path == "generate" || path == "ui" || path == "configure" || strings.HasSuffix(path, "/configure") {
 		serveWebUI(w, r)
 		return
 	}
