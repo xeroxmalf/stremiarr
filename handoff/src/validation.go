@@ -133,6 +133,14 @@ func validateRDLink(targetLink string) {
 		}
 		resp.Body.Close()
 
+		// 405 Method Not Allowed = HEAD not supported but GET might work (e.g., Comet playback).
+		// Treat as inconclusive rather than dead.
+		if resp.StatusCode == 405 {
+			log.Printf("[Validate] ⚠️ HEAD not supported (405), skipping HEAD validation: %s", finalURL)
+			// Clear finalURL to skip further HEAD probes; let playback test it at stream time
+			return
+		}
+
 		// 4xx/5xx means the link is dead - mark invalid immediately
 		if resp.StatusCode >= 400 {
 			log.Printf("[Validate] ❌ Link returned %d: %s", resp.StatusCode, finalURL)

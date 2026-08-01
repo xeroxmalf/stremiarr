@@ -528,6 +528,10 @@ func proxyRequest(w http.ResponseWriter, r *http.Request, addonURL string, subPa
 		w.Header()[k] = append([]string(nil), vv...)
 	}
 	w.WriteHeader(resp.StatusCode)
+	// Skip body write for HEAD requests and no-body status codes (204, 304)
+	if r.Method == "HEAD" || resp.StatusCode == 204 || resp.StatusCode == 304 {
+		return
+	}
 	if _, err := w.Write(body); err != nil {
 		log.Printf("⚠️ Failed to write proxied response: %v", err)
 	}
