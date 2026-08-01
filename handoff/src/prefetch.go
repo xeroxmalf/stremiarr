@@ -336,7 +336,12 @@ func checkRDInstantAvailability(hashes []string) (map[string]bool, error) {
 		chunk := hashes[i:end]
 
 		urlStr := "https://api.real-debrid.com/rest/1.0/torrents/instantAvailability/" + strings.Join(chunk, "/")
-		req, _ := http.NewRequest("GET", urlStr, nil)
+		req, err := http.NewRequest("GET", urlStr, nil)
+		if err != nil {
+			log.Printf("⚠️ [Prefetch] Failed to create instantAvailability request: %v", err)
+			continue
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
 		resp, err := rdDo(req)
 		if err != nil {
 			log.Printf("⚠️ RD Availability check failed for chunk: %v", err)
