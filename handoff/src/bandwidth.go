@@ -2,10 +2,54 @@ package main
 
 import (
 	"log"
+	"sync"
+	"time"
 )
 
-// TrackBandwidth logs proxied bytes and API payloads into the database
-func TrackBandwidth(bytes int, source string) {
+// bandwidthAggregator batches bandwidth records to avoid DB thrashing
+var bwAgg = struct {
+	mu        sync.Mutex
+	records   map[string]int64 // source -> bytes
+	interval  time.Duration
+	lastFlush time.Time
+}{
+	records:  make(map[string]int64),
+	interval: 1 * time.Minute,
+}
+
+func init() {
+	go bwFlushLoop()
+}
+
+func bwFlushLoop() {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		bwFlush()
+	}
+}
+
+func bwFlush() {
+	bwAgg.mu.Lock()
+	if len(bwAgg.records) == 0 {
+		bwAgg.mu.Unlock()
+		return
+	}
+	batch := make(map[string]int64, len(bwAgg.records))
+	for k, v := range bwAgg.records {
+		batch[k] = v
+	}
+	bwAgg.records = make(map[string]int64)
+	bwAgg.mu.Unlock()
+
+	for src, b := range batch {
+		TrackBandwidthDB(int(b), src)
+		TrackMetrics(b)
+	}
+}
+
+// TrackBandwidthDB inserts a single bandwidth record into the database
+func TrackBandwidthDB(bytes int, source string) {
 	if db == nil {
 		return
 	}
@@ -13,8 +57,16 @@ func TrackBandwidth(bytes int, source string) {
 	if err != nil {
 		log.Printf("⚠️ Failed to log bandwidth: %v", err)
 	}
-	TrackMetrics(int64(bytes))
-	log.Printf("📈 Tracked %d bytes of bandwidth from source: %s", bytes, source)
+}
+
+// TrackBandwidth queues bytes for aggregated write to the database
+func TrackBandwidth(bytes int, source string) {
+	if bytes <= 0 {
+		return
+	}
+	bwAgg.mu.Lock()
+	bwAgg.records[source] += int64(bytes)
+	bwAgg.mu.Unlock()
 }
 
 // GetBandwidthStats returns the total bandwidth consumed grouped by source.

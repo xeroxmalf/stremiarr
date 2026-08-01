@@ -33,7 +33,7 @@ func handleOAuthLogin(w http.ResponseWriter, r *http.Request) {
 		Value:    state,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
 	})
 
 	redirect := authURL + "?client_id=" + clientID + "&redirect_uri=" + redirectURI + "&response_type=code&scope=openid profile email&state=" + state

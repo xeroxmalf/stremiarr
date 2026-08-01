@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 )
 
 // SyncArrStack notifies Radarr/Sonarr that a new torrent was added to Real-Debrid and cached.
@@ -13,30 +14,55 @@ import (
 func SyncArrStack(downloadPath string) {
 	radarrURL := os.Getenv("RADARR_URL")
 	radarrAPIKey := os.Getenv("RADARR_API_KEY")
+	sonarrURL := os.Getenv("SONARR_URL")
+	sonarrAPIKey := os.Getenv("SONARR_API_KEY")
 
-	if radarrURL == "" || radarrAPIKey == "" {
+	if radarrURL == "" && sonarrURL == "" {
 		return
 	}
 
-	log.Printf("📡 Running Radarr bidirectional synchronization for path: %s", downloadPath)
+	go func() {
+		if radarrURL != "" && radarrAPIKey != "" {
+			syncWithArr("Radarr", strings.TrimRight(radarrURL, "/")+"/api/v3/command", radarrAPIKey, "DownloadedMoviesScan", downloadPath)
+		}
+
+		if sonarrURL != "" && sonarrAPIKey != "" {
+			syncWithArr("Sonarr", strings.TrimRight(sonarrURL, "/")+"/api/v3/command", sonarrAPIKey, "DownloadedEpisodesScan", downloadPath)
+		}
+	}()
+}
+
+func syncWithArr(name, apiURL, apiKey, command, path string) {
+	log.Printf("📡 Running %s synchronization for path: %s", name, path)
 
 	payload := map[string]interface{}{
-		"name": "DownloadedMoviesScan",
-		"path": downloadPath,
+		"name": command,
+		"path": path,
 	}
-	body, _ := json.Marshal(payload)
+	body, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("⚠️ Failed to marshal %s payload: %v", name, err)
+		return
+	}
 
-	req, _ := http.NewRequest("POST", radarrURL+"/api/v3/command", bytes.NewBuffer(body))
-	req.Header.Set("X-Api-Key", radarrAPIKey)
+	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(body))
+	if err != nil {
+		log.Printf("⚠️ Failed to create %s request: %v", name, err)
+		return
+	}
+	req.Header.Set("X-Api-Key", apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	go func() {
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			log.Printf("⚠️ Failed to sync with Radarr: %v", err)
-			return
-		}
-		defer resp.Body.Close()
-		log.Printf("✅ Successfully triggered Radarr import scan")
-	}()
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		log.Printf("⚠️ Failed to sync with %s: %v", name, err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 200 || resp.StatusCode == 202 {
+		log.Printf("✅ Successfully triggered %s import scan", name)
+	} else {
+		log.Printf("⚠️ %s returned HTTP %d", name, resp.StatusCode)
+	}
 }

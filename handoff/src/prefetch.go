@@ -382,7 +382,10 @@ func scrapeDMMDirectly(ctx context.Context, imdbID, mediaType string) map[string
 	}
 
 	dmmProblemKey, solution := generateDMMToken()
-	url := fmt.Sprintf("https://debridmediamanager.com/api/torrents/%s?imdbId=%s&dmmProblemKey=%s&solution=%s", endpoint, imdbID, dmmProblemKey, solution)
+	url := fmt.Sprintf(
+		"https://debridmediamanager.com/api/torrents/%s?imdbId=%s&dmmProblemKey=%s&solution=%s",
+		endpoint, imdbID, dmmProblemKey, solution,
+	)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -434,8 +437,8 @@ func generateHash(str string) string {
 		hash2 = (hash2 << 5) | (hash2 >> 27)
 	}
 
-	hash1 = hash1 + (hash2 * 1566083941)
-	hash2 = hash2 + (hash1 * 2024237689)
+	hash1 += hash2 * 1566083941
+	hash2 += hash1 * 2024237689
 
 	return fmt.Sprintf("%x", hash1^hash2)
 }
@@ -677,6 +680,15 @@ func runPrefetchJob(ctx context.Context, authKey string, limit int, force bool) 
 		prefetchStatus.AlreadyCached += cachedCount
 		prefetchStatus.Submitted += submittedCount
 		prefetchStatusMu.Unlock()
+
+		// Update Prometheus metrics
+		metricPrefetchItems.Inc()
+		for i := 0; i < cachedCount; i++ {
+			metricPrefetchCached.Inc()
+		}
+		for i := 0; i < submittedCount; i++ {
+			metricPrefetchSubmitted.Inc()
+		}
 
 		addPrefetchLog(fmt.Sprintf("✅ %s — cached:%d submitted:%d", itemLabel, cachedCount, submittedCount))
 

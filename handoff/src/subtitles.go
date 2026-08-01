@@ -6,38 +6,124 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync"
+	"time"
 )
 
-// SyncSubtitles fetches and downloads subtitles from OpenSubtitles API
-func SyncSubtitles(imdbID string) {
-	log.Printf("📝 Triggering Subtitle Synchronization for %s", imdbID)
+var (
+	subtitleMu    sync.Mutex
+	subtitleCache = make(map[string]subtitleCacheEntry)
+	subtitleTTL   = 24 * time.Hour
+	pendingFetch  = make(map[string]bool) // track in-flight fetches to prevent goroutine leaks
+)
 
-	osApiKey := os.Getenv("OPENSUBTITLES_API_KEY")
-	if osApiKey == "" {
-		log.Printf("⚠️ OpenSubtitles API key not set, skipping subtitle sync.")
+// subtitleCacheEntry tracks a cached subtitle download URL and its expiration
+type subtitleCacheEntry struct {
+	URL       string
+	ExpiresAt time.Time
+}
+
+// initSubtitleCache starts the background expiration cleanup goroutine
+func initSubtitleCache() {
+	go func() {
+		ticker := time.NewTicker(30 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			now := time.Now()
+			subtitleMu.Lock()
+			for imdbID, entry := range subtitleCache {
+				if now.After(entry.ExpiresAt) {
+					delete(subtitleCache, imdbID)
+				}
+			}
+			subtitleMu.Unlock()
+		}
+	}()
+}
+
+// SyncSubtitles fetches subtitles from OpenSubtitles API and caches the result
+func SyncSubtitles(imdbID string) {
+	if imdbID == "" {
 		return
 	}
 
-	url := fmt.Sprintf("https://api.opensubtitles.com/api/v1/subtitles?imdb_id=%s&languages=en", imdbID)
-	req, _ := http.NewRequest("GET", url, nil)
+	// Check cache first (respect TTL) and prevent duplicate fetches
+	subtitleMu.Lock()
+	if entry, ok := subtitleCache[imdbID]; ok {
+		if time.Now().Before(entry.ExpiresAt) {
+			subtitleMu.Unlock()
+			return
+		}
+		delete(subtitleCache, imdbID)
+	}
+	// Deduplicate: only one fetch per IMDB ID at a time
+	if pendingFetch[imdbID] {
+		subtitleMu.Unlock()
+		return
+	}
+	pendingFetch[imdbID] = true
+	subtitleMu.Unlock()
+
+	osApiKey := os.Getenv("OPENSUBTITLES_API_KEY")
+	if osApiKey == "" {
+		subtitleMu.Lock()
+		delete(pendingFetch, imdbID)
+		subtitleMu.Unlock()
+		return
+	}
+
+	urlStr := fmt.Sprintf("https://api.opensubtitles.com/api/v1/subtitles?imdb_id=%s&languages=en&sub_format=srt", imdbID)
+	req, err := http.NewRequest("GET", urlStr, nil)
+	if err != nil {
+		subtitleMu.Lock()
+		delete(pendingFetch, imdbID)
+		subtitleMu.Unlock()
+		return
+	}
 	req.Header.Set("Api-Key", osApiKey)
 	req.Header.Set("Content-Type", "application/json")
 
 	go func() {
-		resp, err := http.DefaultClient.Do(req)
+		defer func() {
+			subtitleMu.Lock()
+			delete(pendingFetch, imdbID)
+			subtitleMu.Unlock()
+		}()
+
+		resp, err := httpClient.Do(req)
 		if err != nil {
-			log.Printf("⚠️ Failed to reach OpenSubtitles: %v", err)
 			return
 		}
 		defer resp.Body.Close()
 
-		if resp.StatusCode == 200 {
-			var result map[string]interface{}
-			if err := json.NewDecoder(resp.Body).Decode(&result); err == nil {
-				log.Printf("✅ Subtitles successfully downloaded for %s! They will be mapped to the file dynamically.", imdbID)
+		if resp.StatusCode != 200 {
+			return
+		}
+
+		var result struct {
+			Data []struct {
+				ID           string `json:"id"`
+				DownloadUrl  string `json:"download_url"`
+				LanguageName string `json:"language_name"`
+				Format       string `json:"format"`
+			} `json:"data"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			return
+		}
+
+		// Use first English SRT subtitle found
+		for _, sub := range result.Data {
+			if sub.DownloadUrl != "" && (sub.Format == "srt" || sub.Format == "") {
+				subtitleMu.Lock()
+				subtitleCache[imdbID] = subtitleCacheEntry{
+					URL:       sub.DownloadUrl,
+					ExpiresAt: time.Now().Add(subtitleTTL),
+				}
+				subtitleMu.Unlock()
+				log.Printf("📝 Cached subtitle for %s from OpenSubtitles", imdbID)
+				return
 			}
-		} else {
-			log.Printf("⚠️ OpenSubtitles API returned HTTP %d", resp.StatusCode)
 		}
 	}()
 }

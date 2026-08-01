@@ -2,11 +2,10 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"net/http"
 	"testing"
 	"time"
-
-	"github.com/redis/go-redis/v9"
 )
 
 func TestLocalCatalogCache(t *testing.T) {
@@ -45,7 +44,7 @@ func TestLocalCatalogCache(t *testing.T) {
 
 	// Get cache (should miss)
 	_, _, _, err = lc.GetCatalogCache(key)
-	if err != redis.Nil {
-		t.Fatalf("Expected redis.Nil error due to expiration, but got: %v", err)
+	if !errors.Is(err, ErrCacheMiss) {
+		t.Fatalf("Expected ErrCacheMiss due to expiration, but got: %v", err)
 	}
 }

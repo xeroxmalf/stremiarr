@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"log"
-	"net/http"
 	"os"
 )
 
@@ -23,13 +22,22 @@ func FireWebhook(event, message string) {
 		Event:   event,
 		Message: message,
 	}
-	body, _ := json.Marshal(payload)
+	body, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("⚠️ Webhook marshal failed: %v", err)
+		return
+	}
+
 	go func() {
-		resp, err := http.Post(webhookURL, "application/json", bytes.NewBuffer(body))
+		resp, err := httpClient.Post(webhookURL, "application/json", bytes.NewBuffer(body))
 		if err != nil {
 			log.Printf("⚠️ Webhook delivery failed: %v", err)
 			return
 		}
 		defer resp.Body.Close()
+
+		if resp.StatusCode >= 400 {
+			log.Printf("⚠️ Webhook delivery returned HTTP %d", resp.StatusCode)
+		}
 	}()
 }

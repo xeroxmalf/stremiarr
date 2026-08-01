@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"math"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -19,36 +18,43 @@ import (
 
 // --- ZURG RD LOGIC ---
 func getBackoffDuration(attempt int) time.Duration {
-	base := 1
+	base := 2 // Start with 2s base
 	maxDuration := 60
-	backoff := base * int(math.Pow(2, float64(attempt)))
+	backoff := base * (1 << attempt) // Use bit shift instead of Pow
 	if backoff > maxDuration {
 		backoff = maxDuration
 	}
 
-	maxJitter := float64(backoff) * 0.2
+	maxJitter := float64(backoff) * 0.15 // Reduced jitter from 20% to 15%
 	jitter := rand.Float64() * maxJitter
 
-	finalDuration := float64(backoff) + jitter
-	return time.Duration(finalDuration) * time.Second
+	return time.Duration(float64(backoff)+jitter) * time.Second
 }
 
 func rdDo(req *http.Request) (*http.Response, error) {
+	maxAttempts := 5
+
+	// Preserve request body for retries (must be done BEFORE first attempt)
+	var bodyBytes []byte
+	if req.Body != nil {
+		var err error
+		bodyBytes, err = io.ReadAll(req.Body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read request body: %w", err)
+		}
+		req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+	}
+
 	attempt := 0
 	for {
-		// Clone request body if it exists so we can retry
-		var bodyBytes []byte
-		if req.Body != nil {
-			bodyBytes, _ = io.ReadAll(req.Body)
-			req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+		if attempt > 0 {
+			// Reset body position for retry
+			if len(bodyBytes) > 0 {
+				req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+			}
 		}
 
 		resp, err := httpClient.Do(req)
-
-		// Reset req.Body for next iteration if needed
-		if req.Body != nil {
-			req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
-		}
 
 		if err != nil && strings.Contains(err.Error(), "context canceled") {
 			return nil, err
@@ -60,11 +66,11 @@ func rdDo(req *http.Request) (*http.Response, error) {
 			strings.Contains(err.Error(), "broken pipe"))
 
 		if isNetworkError {
-			if attempt >= 10 { // Max 10 retries for network
-				return nil, err
+			if attempt >= maxAttempts {
+				return nil, fmt.Errorf("network error after %d attempts: %w", maxAttempts, err)
 			}
 			secs := getBackoffDuration(attempt)
-			log.Printf("⚠️ [RD] Network error: %v, retrying in %v...", err, secs)
+			log.Printf("⚠️ [RD] Network error (attempt %d/%d): %v, retrying in %v...", attempt+1, maxAttempts, err, secs)
 			time.Sleep(secs)
 			attempt++
 			continue
@@ -80,6 +86,12 @@ func rdDo(req *http.Request) (*http.Response, error) {
 
 		metricRDApiCalls.WithLabelValues(req.Method, fmt.Sprintf("%d", resp.StatusCode)).Inc()
 
+		if resp.StatusCode >= 400 && resp.StatusCode < 500 && resp.StatusCode != 429 {
+			// Non-retryable client errors (except 429)
+			resp.Body = io.NopCloser(bytes.NewReader(respBodyBytes))
+			return resp, nil
+		}
+
 		if resp.StatusCode >= 400 {
 			// Try parsing as RD JSON error
 			var apiErr struct {
@@ -91,17 +103,25 @@ func rdDo(req *http.Request) (*http.Response, error) {
 			retry := false
 			var wait time.Duration
 
-			if apiErr.ErrorCode == 5 || apiErr.ErrorCode == 34 || apiErr.ErrorCode == 36 || apiErr.ErrorCode == -1 || resp.StatusCode == 429 || resp.StatusCode == 503 {
+			isRetryable := apiErr.ErrorCode == 5 || apiErr.ErrorCode == 34 ||
+				apiErr.ErrorCode == 36 || apiErr.ErrorCode == -1 ||
+				resp.StatusCode == 429 || resp.StatusCode == 503
+			if isRetryable {
 				retry = true
 				wait = getBackoffDuration(attempt)
-				log.Printf("⚠️ [RD] Rate Limit / Server Error (Code: %d, HTTP: %d), retrying in %v...", apiErr.ErrorCode, resp.StatusCode, wait)
+				log.Printf("⚠️ [RD] Rate Limit / Server Error (Code: %d, HTTP: %d, attempt %d/%d), retrying in %v...",
+					apiErr.ErrorCode, resp.StatusCode, attempt+1, maxAttempts, wait)
 			} else if apiErr.ErrorCode == 23 { // traffic_exhausted
 				retry = true
 				wait = 15 * time.Second
-				log.Printf("⚠️ [RD] Traffic exhausted! Go to RD settings and uncheck 'Use my Remote Traffic automatically when needed'. Retrying in %v...", wait)
+				log.Printf("⚠️ [RD] Traffic exhausted! Retrying in %v...", wait)
 			}
 
 			if retry {
+				if attempt >= maxAttempts {
+					resp.Body = io.NopCloser(bytes.NewReader(respBodyBytes))
+					return resp, nil
+				}
 				time.Sleep(wait)
 				attempt++
 				continue
@@ -250,7 +270,10 @@ func (rd *RealDebridProvider) IsRateLimited() bool {
 }
 
 // --- GLOBAL DEBRID MANAGER ---
-var debridProviders []DebridProvider
+var (
+	debridProviders []DebridProvider
+	providersMu     sync.RWMutex
+)
 
 func loadKeysFromDisk() []string {
 	if data, err := os.ReadFile(DataDir + "/keys.json"); err == nil {
@@ -506,6 +529,8 @@ func (oc *OffcloudProvider) Unrestrict(link string) (string, error) {
 func (oc *OffcloudProvider) IsRateLimited() bool { return false }
 
 func getDebridProviderForHost(link string) DebridProvider {
+	providersMu.RLock()
+	defer providersMu.RUnlock()
 	for _, p := range debridProviders {
 		for _, host := range p.Hosts() {
 			if strings.Contains(link, host) {
@@ -518,6 +543,8 @@ func getDebridProviderForHost(link string) DebridProvider {
 
 // Keeping legacy support for API functions that specifically fetch RD keys
 func getRdApiKey() string {
+	providersMu.RLock()
+	defer providersMu.RUnlock()
 	for _, p := range debridProviders {
 		if rd, ok := p.(*RealDebridProvider); ok {
 			return rd.getActiveToken()

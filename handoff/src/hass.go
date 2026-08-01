@@ -18,7 +18,11 @@ func NotifyHomeAssistant(state string, targetLink string) {
 		"state": state,
 		"link":  targetLink,
 	}
-	body, _ := json.Marshal(payload)
+	body, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("⚠️ Home Assistant payload marshal failed: %v", err)
+		return
+	}
 
 	go func() {
 		resp, err := http.Post(hassURL, "application/json", bytes.NewBuffer(body))

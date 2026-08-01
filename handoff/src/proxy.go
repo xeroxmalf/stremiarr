@@ -51,8 +51,14 @@ func (f *StreamFetcher) Merge(other StreamFetcher) {
 	f.Streams = append(f.Streams, other.Streams...)
 }
 
-func fetchFromSource(ctx context.Context, url string) (StreamFetcher, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+func fetchFromSource(ctx context.Context, sourceURL string) (StreamFetcher, error) {
+	select {
+	case <-ctx.Done():
+		return StreamFetcher{}, ctx.Err()
+	default:
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", sourceURL, nil)
 	if err != nil {
 		return StreamFetcher{}, err
 	}
@@ -62,10 +68,17 @@ func fetchFromSource(ctx context.Context, url string) (StreamFetcher, error) {
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != 200 {
+		return StreamFetcher{}, nil
+	}
 
-	// Track bandwidth usage
-	TrackBandwidth(len(body), url)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return StreamFetcher{}, err
+	}
+
+	// Track bandwidth
+	TrackBandwidth(len(body), sourceURL)
 
 	var result map[string]interface{}
 	if err := json.Unmarshal(body, &result); err != nil {
@@ -83,13 +96,12 @@ func fetchFromSource(ctx context.Context, url string) (StreamFetcher, error) {
 	return fetcher, nil
 }
 
-func fetchAndCacheStreams(targetURL string, config Config) ([]byte, error) {
+func fetchAndCacheStreams(ctx context.Context, targetURL string, subPath string, rawQuery string, config Config) ([]byte, error) {
 	log.Printf("[Stream] 🔄 Fetching fresh upstream streams: %s", targetURL)
 
-	// Start with the primary source
+	// Build source list
 	sources := []string{targetURL}
 
-	// Add enabled addon sources from configuration
 	sourcesMu.Lock()
 	enabledSources := make([]AddonSource, 0, len(addonSources))
 	for _, src := range addonSources {
@@ -99,57 +111,74 @@ func fetchAndCacheStreams(targetURL string, config Config) ([]byte, error) {
 	}
 	sourcesMu.Unlock()
 
-	// Add enabled sources (if not already in targetURL)
-	for _, src := range enabledSources {
-		alreadyIncluded := false
+	// Dedup helper
+	addSource := func(u string) {
 		for _, existing := range sources {
-			if strings.Contains(existing, src.URL) || strings.Contains(src.URL, existing) {
-				alreadyIncluded = true
-				break
+			if existing == u {
+				return
 			}
 		}
-		if !alreadyIncluded && !strings.Contains(targetURL, src.URL) {
-			sources = append(sources, src.URL)
-		}
+		sources = append(sources, u)
 	}
 
-	// Also add config-specified sources (if set)
-	if config.TorrentioURL != "" && !strings.Contains(targetURL, config.TorrentioURL) {
-		sources = append(sources, config.TorrentioURL)
-	}
-	if config.MediafusionURL != "" && !strings.Contains(targetURL, config.MediafusionURL) {
-		sources = append(sources, config.MediafusionURL)
-	}
-	if config.StremthruURL != "" && !strings.Contains(targetURL, config.StremthruURL) {
-		sources = append(sources, config.StremthruURL)
+	for _, src := range enabledSources {
+		addSource(getTargetURL(src.URL, subPath, rawQuery))
 	}
 
-	// Fetch from multiple sources in parallel
+	if config.TorrentioURL != "" {
+		addSource(getTargetURL(config.TorrentioURL, subPath, rawQuery))
+	}
+	if config.MediafusionURL != "" {
+		addSource(getTargetURL(config.MediafusionURL, subPath, rawQuery))
+	}
+	if config.StremthruURL != "" {
+		addSource(getTargetURL(config.StremthruURL, subPath, rawQuery))
+	}
+
+	// Parallel fetch with context
 	type result struct {
 		fetcher StreamFetcher
 		err     error
+		source  string
 	}
+
+	// Semaphore to limit concurrent fetches (prevents overwhelming the client)
+	maxConcurrent := 4
+	if len(sources) < maxConcurrent {
+		maxConcurrent = len(sources)
+	}
+	sem := make(chan struct{}, maxConcurrent)
 
 	ch := make(chan result, len(sources))
 	var allFetcher StreamFetcher
-
-	// 🚀 Fast-Fail: Drop upstream sources if they take more than 8 seconds.
-	// This dramatically improves the UX for cache misses (the first ever load).
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-	defer cancel()
+	var fetchErrors []string
 
 	for _, src := range sources {
 		go func(source string) {
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
 			f, err := fetchFromSource(ctx, source)
-			ch <- result{fetcher: f, err: err}
+			ch <- result{fetcher: f, err: err, source: source}
 		}(src)
 	}
 
 	for range sources {
 		res := <-ch
-		if res.err == nil {
+		if res.err != nil {
+			// Don't log context cancellations as errors
+			if res.err != context.DeadlineExceeded && res.err != context.Canceled {
+				fetchErrors = append(fetchErrors, res.source+": "+res.err.Error())
+			}
+			continue
+		}
+		if len(res.fetcher.Streams) > 0 {
 			allFetcher.Merge(res.fetcher)
 		}
+	}
+
+	if len(fetchErrors) > 0 && len(allFetcher.Streams) == 0 {
+		log.Printf("[Stream] ⚠️ All sources failed: %v", fetchErrors)
 	}
 
 	// Deduplicate streams
@@ -418,18 +447,23 @@ func serveStreamsJSON(w http.ResponseWriter, r *http.Request, body []byte, idOrC
 // --------------------------------
 
 func proxyRequest(w http.ResponseWriter, r *http.Request, addonURL string, subPath string, rawQuery string) {
+	// Trigger predictive prefetch and subtitle sync for series/movie metadata
 	if strings.Contains(subPath, "series/tt") || strings.Contains(subPath, "movie/tt") {
 		parts := strings.Split(strings.TrimPrefix(strings.TrimPrefix(subPath, "series/"), "movie/"), ".")
 		if len(parts) > 0 {
 			if strings.Contains(subPath, "series/tt") {
 				PredictivePreCache(parts[0])
 			}
-			SyncSubtitles(strings.Split(parts[0], ":")[0]) // pass imdbID
+			// Extract IMDB ID for subtitle sync
+			if imdbID := strings.Split(parts[0], ":")[0]; strings.HasPrefix(imdbID, "tt") {
+				SyncSubtitles(imdbID)
+			}
 		}
 	}
 
 	targetURL := getTargetURL(addonURL, subPath, r.URL.RawQuery)
 
+	// Check catalog cache first
 	if body, headers, statusCode, err := cache.GetCatalogCache(targetURL); err == nil {
 		if strings.Contains(subPath, "meta/") {
 			body = AugmentMetadata(body)
@@ -439,15 +473,31 @@ func proxyRequest(w http.ResponseWriter, r *http.Request, addonURL string, subPa
 		}
 		w.WriteHeader(statusCode)
 		if _, err := w.Write(body); err != nil {
-			log.Printf("⚠️ Failed to write response: %v", err)
+			log.Printf("⚠️ Failed to write cached response: %v", err)
 		}
-		log.Printf("[Catalog] ⚡ Cache hit for: %s", targetURL)
 		return
 	}
 
-	log.Printf("[Catalog] 🔀 Proxying meta/catalog request to: %s", targetURL)
+	// Proxy the request with timeout
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
 
-	resp, err := httpClient.Get(targetURL)
+	req, err := http.NewRequestWithContext(ctx, r.Method, targetURL, r.Body)
+	if err != nil {
+		log.Printf("[Catalog] ❌ Failed to create request: %v", err)
+		http.Error(w, "Bad Gateway", http.StatusBadGateway)
+		return
+	}
+
+	// Copy relevant headers
+	for k, vv := range r.Header {
+		if k != "Host" && k != "Connection" && k != "Content-Length" {
+			// Copy slice values to avoid aliasing the original header
+			req.Header[k] = append([]string(nil), vv...)
+		}
+	}
+
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		log.Printf("[Catalog] ❌ Proxy request failed: %v", err)
 		http.Error(w, "Bad Gateway", http.StatusBadGateway)
@@ -455,21 +505,30 @@ func proxyRequest(w http.ResponseWriter, r *http.Request, addonURL string, subPa
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("[Catalog] ❌ Failed to read response: %v", err)
+		http.Error(w, "Bad Gateway", http.StatusBadGateway)
+		return
+	}
 
-	if err := cache.SetCatalogCache(targetURL, body, resp.Header.Clone(), resp.StatusCode, 5*time.Minute); err != nil {
-		log.Printf("⚠️ Failed to set catalog cache: %v", err)
+	// Cache successful responses
+	if resp.StatusCode == 200 {
+		if err := cache.SetCatalogCache(targetURL, body, resp.Header.Clone(), resp.StatusCode, 5*time.Minute); err != nil {
+			log.Printf("⚠️ Failed to cache catalog response: %v", err)
+		}
 	}
 
 	if strings.Contains(subPath, "meta/") {
 		body = AugmentMetadata(body)
 	}
 
-	for k, v := range resp.Header {
-		w.Header()[k] = v
+	// Copy response headers (clone values to avoid shared slices)
+	for k, vv := range resp.Header {
+		w.Header()[k] = append([]string(nil), vv...)
 	}
 	w.WriteHeader(resp.StatusCode)
 	if _, err := w.Write(body); err != nil {
-		log.Printf("⚠️ Failed to write response: %v", err)
+		log.Printf("⚠️ Failed to write proxied response: %v", err)
 	}
 }

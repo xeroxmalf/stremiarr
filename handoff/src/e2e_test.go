@@ -20,7 +20,9 @@ func TestStremioE2EWorkflow(t *testing.T) {
 	upstreamMux := http.NewServeMux()
 	upstreamMux.HandleFunc("/manifest.json", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if _, err := w.Write([]byte(`{"id":"org.e2e.mock","version":"1.0.0","name":"E2E Mock","resources":["catalog","stream"],"types":["movie","series"]}`)); err != nil {
+		manifest := `{"id":"org.e2e.mock","version":"1.0.0","name":"E2E Mock",` +
+			`"resources":["catalog","stream"],"types":["movie","series"]}`
+		if _, err := w.Write([]byte(manifest)); err != nil {
 			t.Logf("Failed to write mock response: %v", err)
 		}
 	})
@@ -91,15 +93,21 @@ func TestStremioE2EWorkflow(t *testing.T) {
 		t.Fatalf("Step 3 Failed: Expected at least 1 stream, got 0")
 	}
 
-	wrappedURL, ok := streamResp.Streams[0]["url"].(string)
-	if !ok || !strings.Contains(wrappedURL, "/e2e/play?link=") {
-		t.Fatalf("Step 3 Failed: Stream URL was not wrapped correctly. Got: %v", wrappedURL)
-	}
-
-	// Ensure the embedded stream correctly URL encoded the upstream HTTP link
+	// Streams are aggregated from multiple sources; find our mock's stream
 	expectedTarget := url.QueryEscape("http://fake.provider.com/download.mp4")
-	if !strings.Contains(wrappedURL, expectedTarget) {
-		t.Fatalf("Step 3 Failed: Stream URL does not contain expected target link. Got: %s", wrappedURL)
+	var wrappedURL string
+	for _, s := range streamResp.Streams {
+		u, ok := s["url"].(string)
+		if ok && strings.Contains(u, expectedTarget) {
+			wrappedURL = u
+			break
+		}
+	}
+	if wrappedURL == "" {
+		t.Fatalf("Step 3 Failed: Expected stream from mock addon not found in aggregated results")
+	}
+	if !strings.Contains(wrappedURL, "/e2e/play?link=") {
+		t.Fatalf("Step 3 Failed: Stream URL was not wrapped correctly. Got: %v", wrappedURL)
 	}
 
 	// --- STEP 4: LOAD STREAM (Clicking a result to play) ---

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -60,6 +61,10 @@ func initDB() {
 	var isPg bool
 
 	if dbType == "postgresql" {
+		// Normalize postgres:// to postgresql:// if needed (lib/pq accepts both but be explicit)
+		if strings.HasPrefix(dbUrl, "postgres://") {
+			dbUrl = "postgresql://" + dbUrl[len("postgres://"):]
+		}
 		conn, err = sql.Open("postgres", dbUrl)
 		if err != nil {
 			log.Fatalf("❌ Failed to open Postgres DB: %v", err)
@@ -67,17 +72,30 @@ func initDB() {
 		isPg = true
 		conn.SetMaxOpenConns(25)
 		conn.SetMaxIdleConns(5)
-		conn.SetConnMaxLifetime(5 * time.Minute)
+		conn.SetConnMaxLifetime(10 * time.Minute)
+		conn.SetConnMaxIdleTime(5 * time.Minute)
+		if err := conn.Ping(); err != nil {
+			log.Fatalf("❌ Failed to ping Postgres DB: %v", err)
+		}
 		log.Printf("💾 Postgres database initialized")
 	} else {
-		conn, err = sql.Open("sqlite", DataDir+"/streams.db?_busy_timeout=5000&_journal_mode=WAL&_sync=NORMAL&_cache_size=-20000")
+		conn, err = sql.Open("sqlite", DataDir+"/streams.db?_busy_timeout=5000&_journal_mode=WAL&_sync=NORMAL&_cache_size=-65536")
 		if err != nil {
 			log.Fatalf("❌ Failed to open SQLite DB: %v", err)
 		}
-		if _, err := conn.Exec("PRAGMA temp_store = MEMORY;"); err != nil {
+		conn.SetMaxOpenConns(1) // Avoid SQLite database is locked
+		if _, err := conn.Exec("PRAGMA journal_mode=WAL;"); err != nil {
+			log.Printf("⚠️ Failed to set PRAGMA journal_mode: %v", err)
+		}
+		if _, err := conn.Exec("PRAGMA temp_store=MEMORY;"); err != nil {
 			log.Printf("⚠️ Failed to set PRAGMA temp_store: %v", err)
 		}
-		conn.SetMaxOpenConns(1) // Avoid SQLite database is locked
+		if _, err := conn.Exec("PRAGMA synchronous=NORMAL;"); err != nil {
+			log.Printf("⚠️ Failed to set PRAGMA synchronous: %v", err)
+		}
+		if _, err := conn.Exec("PRAGMA mmap_size=268435456;"); err != nil {
+			log.Printf("⚠️ Failed to set PRAGMA mmap_size: %v", err)
+		}
 		isPg = false
 		log.Printf("💾 SQLite database initialized at %s/streams.db", DataDir)
 	}

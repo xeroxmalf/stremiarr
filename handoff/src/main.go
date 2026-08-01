@@ -1,22 +1,28 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 )
 
 func main() {
 	log.SetOutput(os.Stdout)
-	log.SetFlags(log.Ldate | log.Ltime)
+	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
 
 	initDB()
 	initDBMaintenance()
 	initCache()
+	initCatalogCache()
+	initSubtitleCache()
+	initSessionCleanup()
 	initDebridPools()
 	initValidationPool()
-	initCatalogCache()
+	initAddonSources()
 	StartAnomalyWorker()
 	initRateLimiter()
 	initWebSocketHub()
@@ -27,7 +33,7 @@ func main() {
 	}
 
 	loadMappings()
-	initAddonSources()
+	loadPrefetchHistory()
 
 	// Load saved Stremio auth key if available
 	if key := loadStremioAuth(); key != "" {
@@ -37,21 +43,47 @@ func main() {
 		log.Printf("🎬 Loaded saved Stremio auth key")
 	}
 
-	http.HandleFunc("/", gzipMiddleware(rateLimitMiddleware(routeHandler)))
+	log.Printf("🔐 Admin auth: %s", func() string {
+		if AdminPassword != "" {
+			return "ENABLED"
+		}
+		return "disabled"
+	}())
+
+	http.HandleFunc("/", gzipMiddleware(rateLimitMiddleware(observeRequestDuration(routeHandler))))
 
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8080"
+		port = "9944"
 	}
-
-	log.Printf("🚀 DebridHandoff Engine Initialized!")
-	log.Printf("📡 Listening for Stremio traffic on port %s", port)
 
 	srv := &http.Server{
 		Addr:         ":" + port,
 		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 60 * time.Second,
+		WriteTimeout: 120 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
-	log.Fatal(srv.ListenAndServe())
+
+	// Graceful shutdown handler
+	go func() {
+		quit := make(chan os.Signal, 1)
+		signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+		<-quit
+		log.Printf("🛑 Shutting down server...")
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		if err := srv.Shutdown(ctx); err != nil {
+			log.Printf("⚠️ Server forced to shutdown: %v", err)
+		}
+		log.Printf("✅ Server shutdown complete")
+	}()
+
+	log.Printf("🚀 Handoff Engine Initialized!")
+	log.Printf("📡 Listening on port %s", port)
+
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Fatalf("❌ Server failed to start: %v", err)
+	}
 }

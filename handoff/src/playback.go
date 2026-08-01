@@ -27,8 +27,10 @@ func waitForVFS(targetPath string, maxRetries int) bool {
 	}
 
 	log.Printf("[Play] 🔄 Triggering Rclone VFS cache refresh via %s/vfs/refresh?dir=links...", rcURL)
-	rcReq, _ := http.NewRequest("POST", rcURL+"/vfs/refresh?dir=links", nil)
-	if rcResp, err := httpClient.Do(rcReq); err == nil {
+	rcReq, err := http.NewRequest("POST", rcURL+"/vfs/refresh?dir=links", nil)
+	if err != nil {
+		log.Printf("[Play] ⚠️ Failed to create VFS refresh request: %v", err)
+	} else if rcResp, err := httpClient.Do(rcReq); err == nil {
 		rcResp.Body.Close()
 		log.Printf("[Play] ✅ Rclone VFS refresh command sent successfully.")
 	} else {
@@ -36,7 +38,11 @@ func waitForVFS(targetPath string, maxRetries int) bool {
 	}
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
-		probeReq, _ := http.NewRequest("GET", targetPath, nil)
+		probeReq, err := http.NewRequest("GET", targetPath, nil)
+		if err != nil {
+			log.Printf("[Play] ⚠️ Failed to create VFS probe request: %v", err)
+			continue
+		}
 		probeReq.Header.Set("Range", "bytes=0-0")
 		if RcloneAuth != "" {
 			probeReq.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(RcloneAuth)))
@@ -100,7 +106,12 @@ func playHandler(w http.ResponseWriter, r *http.Request, conf Config) {
 
 	log.Printf("[Play] 🕵️ Following redirects to find final video URL...")
 	for i := 0; i < 5; i++ {
-		req, _ := http.NewRequest("GET", finalURL, nil)
+		req, err := http.NewRequest("GET", finalURL, nil)
+		if err != nil {
+			log.Printf("[Play] ❌ Failed to create redirect request for %s: %v", finalURL, err)
+			recordStrike(targetLink)
+			break
+		}
 		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Stremio")
 
 		resp, err := client.Do(req)
@@ -110,13 +121,6 @@ func playHandler(w http.ResponseWriter, r *http.Request, conf Config) {
 		}
 		resp.Body.Close()
 
-		// Hard reject 4xx/5xx non-redirect responses
-		if resp.StatusCode >= 400 {
-			log.Printf("[Play] ❌ Non-redirect error during redirect follow: %d for %s", resp.StatusCode, finalURL)
-			recordStrike(targetLink)
-			break
-		}
-
 		if resp.StatusCode >= 300 && resp.StatusCode <= 399 {
 			loc, err := resp.Location()
 			if err == nil && loc.String() != "" {
@@ -124,7 +128,25 @@ func playHandler(w http.ResponseWriter, r *http.Request, conf Config) {
 				continue
 			}
 		}
+		// Non-3xx response: we found the final URL or an error status
 		break
+	}
+
+	// Reject immediately if the final URL returned an error status
+	// (re-probe to get the current status)
+	reqStatus, err := http.NewRequest("HEAD", finalURL, nil)
+	if err == nil {
+		reqStatus.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Stremio")
+		respStatus, err := client.Do(reqStatus)
+		if err == nil && respStatus.StatusCode >= 400 {
+			log.Printf("[Play] ❌ Final URL returning error %d for %s", respStatus.StatusCode, finalURL)
+			respStatus.Body.Close()
+			recordStrike(targetLink)
+			http.Error(w, "Stream unavailable", http.StatusNotFound)
+			return
+		} else if err == nil {
+			respStatus.Body.Close()
+		}
 	}
 
 	// If final URL is junk or suspicious, reject early
@@ -183,6 +205,13 @@ func playHandler(w http.ResponseWriter, r *http.Request, conf Config) {
 				},
 				BufferPool: proxyPool,
 				Transport:  customTransport,
+				ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
+					log.Printf("[Play] ❌ Rclone proxy error: %v", err)
+					recordStrike(targetLink)
+					if w.Header().Get("Content-Type") == "" {
+						http.Error(w, "Stream error", http.StatusBadGateway)
+					}
+				},
 			}
 			proxy.ServeHTTP(w, r)
 			return
@@ -206,12 +235,20 @@ func playHandler(w http.ResponseWriter, r *http.Request, conf Config) {
 			},
 			BufferPool: proxyPool,
 			Transport:  customTransport,
+			ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
+				log.Printf("[Play] ❌ RD proxy error: %v", err)
+				recordStrike(targetLink)
+				if w.Header().Get("Content-Type") == "" {
+					http.Error(w, "Stream error", http.StatusBadGateway)
+				}
+			},
 		}
 		proxy.ServeHTTP(w, r)
 		return
+	}
 
-		// 🎯 2. STANDARD ROUTE: unlocked debrid link
-	} else if provider := getDebridProviderForHost(finalURL); provider != nil {
+	// 🎯 2. STANDARD ROUTE: locked debrid link requiring unrestrict
+	if provider := getDebridProviderForHost(finalURL); provider != nil {
 		log.Printf("[Play] 🔓 Locked link detected. Un-restricting via %s API...", provider.Name())
 
 		success := false
@@ -239,8 +276,10 @@ func playHandler(w http.ResponseWriter, r *http.Request, conf Config) {
 		parsedURL, _ := url.Parse(downloadURL)
 		filename = filepath.Base(parsedURL.Path)
 	}
+
+	// 🎯 3. Non-Debrid or parse failure: redirect Stremio directly
 	if filename == "" || filename == "/" {
-		log.Printf("[Play] ⏭️ Non-Debrid link or parse failure. Bypassing proxy and redirecting Stremio.")
+		log.Printf("[Play] ⏭️ Non-Debrid link or parse failure. Redirecting Stremio directly.")
 		metricStreamsPlayed.Inc()
 		w.Header().Set("Location", finalURL)
 		w.WriteHeader(http.StatusFound)
@@ -284,6 +323,13 @@ func playHandler(w http.ResponseWriter, r *http.Request, conf Config) {
 		},
 		BufferPool: proxyPool,
 		Transport:  customTransport,
+		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
+			log.Printf("[Play] ❌ Final proxy error: %v", err)
+			recordStrike(targetLink)
+			if w.Header().Get("Content-Type") == "" {
+				http.Error(w, "Stream error", http.StatusBadGateway)
+			}
+		},
 	}
 
 	proxy.ServeHTTP(w, r)

@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -11,6 +13,8 @@ import (
 
 	"github.com/redis/go-redis/v9"
 )
+
+var ErrCacheMiss = errors.New("cache miss")
 
 type CacheBackend interface {
 	GetStreamCache(key string) (string, error)
@@ -32,39 +36,58 @@ func NewRedisCache(url string) *RedisCache {
 		log.Fatalf("❌ Invalid Redis URL: %v", err)
 	}
 	client := redis.NewClient(opt)
+
+	// Verify connectivity
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	if err := client.Ping(ctx).Err(); err != nil {
+		cancel()
+		log.Fatalf("❌ Cannot connect to Redis: %v", err)
+	}
+	cancel()
+
 	return &RedisCache{client: client}
 }
 
 func (r *RedisCache) GetStreamCache(key string) (string, error) {
-	ctx := context.Background()
-	return r.client.Get(ctx, "stream:"+key).Result()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	val, err := r.client.Get(ctx, "stream:"+key).Result()
+	if err == redis.Nil {
+		return "", ErrCacheMiss
+	}
+	return val, err
 }
 
 func (r *RedisCache) SetStreamCache(key string, data string, ttl time.Duration) error {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
 	return r.client.Set(ctx, "stream:"+key, data, ttl).Err()
 }
 
 func (r *RedisCache) GetCatalogCache(key string) ([]byte, http.Header, int, error) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 	val, err := r.client.Get(ctx, "catalog:"+key).Result()
+	if err == redis.Nil {
+		return nil, nil, 0, ErrCacheMiss
+	}
 	if err != nil {
 		return nil, nil, 0, err
 	}
 
 	var ce cacheEntry
-	err = json.Unmarshal([]byte(val), &ce)
-	if err != nil {
+	if err := json.Unmarshal([]byte(val), &ce); err != nil {
 		return nil, nil, 0, err
 	}
 	return ce.Body, ce.Headers, ce.StatusCode, nil
 }
 
 func (r *RedisCache) SetCatalogCache(key string, body []byte, headers http.Header, statusCode int, ttl time.Duration) error {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
 	ce := cacheEntry{
 		Body:       body,
-		Headers:    headers,
+		Headers:    headers.Clone(),
 		StatusCode: statusCode,
 		ExpiresAt:  time.Now().Add(ttl),
 	}
@@ -83,6 +106,9 @@ type LocalCache struct{}
 func (l *LocalCache) GetStreamCache(key string) (string, error) {
 	var data string
 	err := db.QueryRow("SELECT streams_json FROM stream_cache WHERE request_id = ?", key).Scan(&data)
+	if err == sql.ErrNoRows {
+		return "", ErrCacheMiss
+	}
 	return data, err
 }
 
@@ -106,7 +132,7 @@ func (l *LocalCache) GetCatalogCache(key string) ([]byte, http.Header, int, erro
 		}
 		catalogCache.Delete(key)
 	}
-	return nil, nil, 0, redis.Nil
+	return nil, nil, 0, ErrCacheMiss
 }
 
 func (l *LocalCache) SetCatalogCache(key string, body []byte, headers http.Header, statusCode int, ttl time.Duration) error {

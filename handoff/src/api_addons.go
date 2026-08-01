@@ -37,22 +37,14 @@ func loadSourcesFromDisk() {
 	log.Printf("📁 Loaded %d addon sources from disk", len(sources))
 }
 
-// saveSourcesToDisk persists the current addonSources slice to /data/sources.json.
-func saveSourcesToDisk() {
-	sourcesMu.Lock()
-	sources := make([]AddonSource, len(addonSources))
-	copy(sources, addonSources)
-	sourcesMu.Unlock()
-
-	data, err := json.MarshalIndent(sources, "", "  ")
+// saveSourcesToDiskLocked must be called with sourcesMu held.
+func saveSourcesToDiskLocked() error {
+	data, err := json.MarshalIndent(addonSources, "", "  ")
 	if err != nil {
 		log.Printf("❌ Failed to serialize sources: %v", err)
-		return
+		return err
 	}
-
-	if err := os.WriteFile(getSourcesPath(), data, 0644); err != nil {
-		log.Printf("❌ Failed to write sources.json: %v", err)
-	}
+	return os.WriteFile(getSourcesPath(), data, 0644)
 }
 
 // initAddonSources loads saved sources from disk, overriding the hardcoded defaults.
@@ -188,9 +180,11 @@ func discoverAddon(w http.ResponseWriter, r *http.Request) {
 		URL:     rawURL,
 		Enabled: true,
 	})
+	// Save while still holding the lock to avoid race with other writers
+	if err := saveSourcesToDiskLocked(); err != nil {
+		log.Printf("⚠️ Failed to save sources: %v", err)
+	}
 	sourcesMu.Unlock()
-
-	saveSourcesToDisk()
 
 	log.Printf("✅ [Discover] Added addon source: %s (%s)", name, id)
 
@@ -238,7 +232,12 @@ func removeDiscoveredAddon(w http.ResponseWriter, r *http.Request) {
 		}
 		newSources = append(newSources, src)
 	}
-	addonSources = newSources
+	if found {
+		addonSources = newSources
+		if err := saveSourcesToDiskLocked(); err != nil {
+			log.Printf("❌ Failed to write sources.json: %v", err)
+		}
+	}
 	sourcesMu.Unlock()
 
 	if !found {
@@ -248,8 +247,6 @@ func removeDiscoveredAddon(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-
-	saveSourcesToDisk()
 	log.Printf("🗑️ [Discover] Removed addon source: %s", rawURL)
 
 	w.WriteHeader(http.StatusOK)

@@ -11,11 +11,23 @@ import (
 	"time"
 )
 
+// serveAPIAdminStatus returns whether admin password auth is configured
+func serveAPIAdminStatus(w http.ResponseWriter, r *http.Request) {
+	configured := AdminPassword != ""
+	if _, err := w.Write([]byte(fmt.Sprintf(`{"configured":%v}`, configured))); err != nil {
+		log.Printf("⚠️ Failed to write admin status: %v", err)
+	}
+}
+
 func serveAPI(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	path := r.URL.Path
 	switch {
+	case path == "/api/admin/status":
+		serveAPIAdminStatus(w, r)
+	case path == "/api/config":
+		serveAPIConfig(w, r)
 	case path == "/api/stats":
 		RequireRole("admin", serveAPIStats)(w, r)
 	case path == "/api/bandwidth":
@@ -53,14 +65,74 @@ func serveAPI(w http.ResponseWriter, r *http.Request) {
 		handleOAuthLogin(w, r)
 	case path == "/auth/callback":
 		handleOAuthCallback(w, r)
+	case path == "/auth/session":
+		serveAPISession(w, r)
+	case path == "/auth/logout":
+		serveAPILogout(w, r)
 	default:
 		http.Error(w, "Not found", http.StatusNotFound)
 	}
 }
 
+// serveAPILogout clears the session cookie and revokes the session server-side
+func serveAPILogout(w http.ResponseWriter, r *http.Request) {
+	// Revoke session token server-side
+	if cookie, err := r.Cookie("handoff_session"); err == nil && cookie != nil {
+		revokeSession(cookie.Value)
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     "handoff_session",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
+		SameSite: http.SameSiteLaxMode,
+	})
+	if _, err := w.Write([]byte(`{"status":"ok"}`)); err != nil {
+		log.Printf("⚠️ Failed to write logout response: %v", err)
+	}
+}
+
+// serveAPISession handles POST /api/auth/session for admin login
+func serveAPISession(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	if req.Password != AdminPassword {
+		http.Error(w, "Invalid password", http.StatusUnauthorized)
+		return
+	}
+
+	sessionToken := createSession(AdminPassword)
+	http.SetCookie(w, &http.Cookie{
+		Name:     "handoff_session",
+		Value:    sessionToken,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   86400 * 7, // 7 days
+	})
+
+	if _, err := w.Write([]byte(`{"status":"ok"}`)); err != nil {
+		log.Printf("⚠️ Failed to write session response: %v", err)
+	}
+}
+
 func serveAPIStats(w http.ResponseWriter, r *http.Request) {
-	var totalURLs, validURLs, failedURLs int
-	var cachedRequests, recentValidations int
+	// Use a single query for efficiency
+	var totalURLs, validURLs, failedURLs, cachedRequests, recentValidations int
 
 	if err := db.QueryRow("SELECT COUNT(*) FROM stream_urls").Scan(&totalURLs); err != nil {
 		log.Printf("⚠️ db error: %v", err)
@@ -78,17 +150,17 @@ func serveAPIStats(w http.ResponseWriter, r *http.Request) {
 		log.Printf("⚠️ db error: %v", err)
 	}
 
-	if _, err := w.Write([]byte(fmt.Sprintf(`{
-		"totalStreams": %d,
-		"validStreams": %d,
-		"failedStreams": %d,
-		"cachedRequests": %d,
-		"recentValidations": %d,
-		"uptime": "%s"
-	}`,
-		totalURLs, validURLs, failedURLs, cachedRequests, recentValidations,
-		time.Since(startTime).Round(time.Second).String(),
-	))); err != nil {
+	w.Header().Set("Content-Type", "application/json")
+	resp, _ := json.Marshal(map[string]interface{}{
+		"totalStreams":      totalURLs,
+		"validStreams":      validURLs,
+		"failedStreams":     failedURLs,
+		"cachedRequests":    cachedRequests,
+		"recentValidations": recentValidations,
+		"uptime":            time.Since(startTime).Round(time.Second).String(),
+	})
+
+	if _, err := w.Write(resp); err != nil {
 		log.Printf("⚠️ Failed to write stats response: %v", err)
 	}
 }
@@ -103,15 +175,20 @@ func serveAPIBandwidth(w http.ResponseWriter, r *http.Request) {
 
 func serveAPIKeys(w http.ResponseWriter, r *http.Request) {
 	var rd *RealDebridProvider
+	providersMu.RLock()
 	for _, p := range debridProviders {
 		if provider, ok := p.(*RealDebridProvider); ok {
 			rd = provider
 			break
 		}
 	}
+	providersMu.RUnlock()
+
 	if rd == nil {
 		rd = &RealDebridProvider{}
+		providersMu.Lock()
 		debridProviders = append(debridProviders, rd)
+		providersMu.Unlock()
 	}
 
 	rd.Mu.Lock()
@@ -215,10 +292,10 @@ func serveAPIKeys(w http.ResponseWriter, r *http.Request) {
 }
 
 func serveAPISourcesGet(w http.ResponseWriter, r *http.Request) {
-	sourcesMu.Lock()
+	sourcesMu.RLock()
 	sources := make([]AddonSource, len(addonSources))
 	copy(sources, addonSources)
-	sourcesMu.Unlock()
+	sourcesMu.RUnlock()
 
 	if _, err := w.Write([]byte(fmt.Sprintf(`{"sources": %s}`, marshalJSON(sources)))); err != nil {
 		log.Printf("⚠️ Failed to write sources: %v", err)
@@ -237,8 +314,10 @@ func serveAPISourcesUpdate(w http.ResponseWriter, r *http.Request) {
 
 	sourcesMu.Lock()
 	addonSources = req.Sources
+	if err := saveSourcesToDiskLocked(); err != nil {
+		log.Printf("❌ Failed to write sources.json: %v", err)
+	}
 	sourcesMu.Unlock()
-	saveSourcesToDisk()
 
 	if _, err := w.Write([]byte(`{"status": "ok", "message": "Sources updated"}`)); err != nil {
 		log.Printf("⚠️ Failed to write response: %v", err)

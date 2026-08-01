@@ -70,6 +70,7 @@ func revalidationSweep() {
 
 func validationWorker() {
 	for link := range validateCh {
+		metricValidationAttempts.Inc()
 		validateRDLink(link)
 
 		// THROTTLE: 1.5s between validations to avoid 429s while keeping validation timely
@@ -79,7 +80,10 @@ func validationWorker() {
 
 // Helper: Probes file size without downloading the video
 func probeFileSize(downloadURL string) int64 {
-	req, _ := http.NewRequest("GET", downloadURL, nil)
+	req, err := http.NewRequest("HEAD", downloadURL, nil)
+	if err != nil {
+		return 0
+	}
 	req.Header.Set("Range", "bytes=0-0")
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Stremio")
 
@@ -104,7 +108,6 @@ func probeFileSize(downloadURL string) int64 {
 }
 
 func validateRDLink(targetLink string) {
-	log.Printf("[Validation] 🔍 Starting validation for link: %s", targetLink)
 	finalURL := targetLink
 
 	client := &http.Client{
@@ -114,20 +117,28 @@ func validateRDLink(targetLink string) {
 		Timeout: 10 * time.Second,
 	}
 
-	// 1. Follow redirects
-	log.Printf("[Validation] 🕵️ Following redirects for: %s", finalURL)
+	// 1. Follow redirects (max 5)
 	for i := 0; i < 5; i++ {
-		req, _ := http.NewRequest("GET", finalURL, nil)
-		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Stremio")
-		resp, err := client.Do(req)
-
+		req, err := http.NewRequest("HEAD", finalURL, nil)
 		if err != nil {
-			if _, err := db.Exec("UPDATE stream_urls SET is_valid = FALSE, last_validated = ? WHERE url = ?", time.Now(), targetLink); err != nil {
-				log.Printf("⚠️ Failed to update stream valid state: %v", err)
-			}
+			markInvalid(targetLink)
+			return
+		}
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Stremio")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			markInvalid(targetLink)
 			return
 		}
 		resp.Body.Close()
+
+		// 4xx/5xx means the link is dead - mark invalid immediately
+		if resp.StatusCode >= 400 {
+			log.Printf("[Validate] ❌ Link returned %d: %s", resp.StatusCode, finalURL)
+			markInvalid(targetLink)
+			return
+		}
 
 		if resp.StatusCode >= 300 && resp.StatusCode <= 399 {
 			loc, err := resp.Location()
@@ -144,42 +155,50 @@ func validateRDLink(targetLink string) {
 	// 2. Unrestrict if needed to get the final download URL
 	provider := getDebridProviderForHost(finalURL)
 	if provider != nil && !strings.Contains(finalURL, ".download.real-debrid.com") {
-		log.Printf("[Validation] 🔓 Requesting unrestrict from %s for: %s", provider.Name(), finalURL)
-
 		dl, err := provider.Unrestrict(finalURL)
 		if err == nil && dl != "" {
 			downloadURL = dl
 		} else {
-			if _, err := db.Exec("UPDATE stream_urls SET is_valid = FALSE, last_validated = ? WHERE url = ?", time.Now(), targetLink); err != nil {
-				log.Printf("⚠️ Failed to update stream valid state: %v", err)
-			}
+			markInvalid(targetLink)
 			return
 		}
 	}
 
 	// 3. Range Probe & Size Check the final download URL
-	log.Printf("[Validation] 📏 Size probing URL: %s", downloadURL)
-
 	size := probeFileSize(downloadURL)
 
-	// 🛑 "Provider Unavailable" / Error Video Size Check
+	// 🛑 "Provider Unavailable" / Error Video Size Check (< 25MB is suspicious)
 	if size > 0 && size < 25000000 {
-		log.Printf("[Validation] 🚫 Error Video detected (%d bytes). Redacting: %s", size, targetLink)
-		if _, err := db.Exec("UPDATE stream_urls SET is_valid = FALSE, last_validated = ? WHERE url = ?", time.Now(), targetLink); err != nil {
-			log.Printf("⚠️ Failed to update stream valid state: %v", err)
-		}
+		markInvalid(targetLink)
 		return
-	} else if size > 0 {
-		log.Printf("[Validation] ✅ Range probe successful (%d bytes) for: %s", size, targetLink)
-		if _, err := db.Exec("UPDATE stream_urls SET is_valid = TRUE, last_validated = ? WHERE url = ?", time.Now(), targetLink); err != nil {
-			log.Printf("⚠️ Failed to update stream valid state: %v", err)
-		}
+	}
+	if size > 0 {
+		markValid(targetLink, size)
 		return
-	} else {
-		if _, err := db.Exec("UPDATE stream_urls SET is_valid = FALSE, last_validated = ? WHERE url = ?", time.Now(), targetLink); err != nil {
-			log.Printf("⚠️ Failed to update stream valid state: %v", err)
-		}
-		log.Printf("[Validation] 🚫 Range probe failed & redacted silently: %s", targetLink)
-		return
+	}
+	markInvalid(targetLink)
+}
+
+func markValid(url string, fileSize int64) {
+	metricValidationSuccess.Inc()
+	now := time.Now()
+	_, err := db.Exec(
+		"UPDATE stream_urls SET is_valid = TRUE, fail_count = 0, last_validated = ?, success_count = success_count + 1 WHERE url = ?",
+		now, url,
+	)
+	if err != nil {
+		log.Printf("⚠️ Failed to mark stream valid: %v", err)
+	}
+}
+
+func markInvalid(url string) {
+	metricValidationFailed.Inc()
+	now := time.Now()
+	_, err := db.Exec(
+		"UPDATE stream_urls SET is_valid = FALSE, fail_count = fail_count + 1, last_validated = ? WHERE url = ?",
+		now, url,
+	)
+	if err != nil {
+		log.Printf("⚠️ Failed to mark stream invalid: %v", err)
 	}
 }

@@ -37,7 +37,8 @@ func DetectAnomalies() {
 	// If more than 20% of streams are dead, trigger an anomaly webhook alert!
 	if failureRate > 0.20 {
 		log.Printf("⚠️ ANOMALY DETECTED: High stream failure rate!")
-		FireWebhook("anomaly_detected", fmt.Sprintf("High stream failure rate detected: %.2f%% of all known streams are returning errors.", failureRate*100))
+		msg := fmt.Sprintf("High stream failure rate detected: %.2f%% of all known streams are returning errors.", failureRate*100)
+		FireWebhook("anomaly_detected", msg)
 	}
 }
 
