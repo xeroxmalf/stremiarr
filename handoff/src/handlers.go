@@ -116,8 +116,8 @@ func routeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// API endpoints
-	if strings.HasPrefix(r.URL.Path, "/api/") {
+	// API and auth endpoints
+	if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/auth/") {
 		serveAPI(w, r)
 		return
 	}
@@ -159,6 +159,11 @@ func routeHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		if strings.HasPrefix(subPath, "play") {
 			playHandler(w, r, mappedConf)
+			return
+		}
+		// Unknown path under alias (e.g., /alias/login) — redirect to root UI/login
+		if strings.HasPrefix(subPath, "login") || strings.HasPrefix(subPath, "ui") {
+			http.Redirect(w, r, "/"+subPath, http.StatusFound)
 			return
 		}
 	}
