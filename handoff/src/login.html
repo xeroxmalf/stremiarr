@@ -120,7 +120,7 @@
       submitBtn.textContent = 'Signing in...';
 
       try {
-        const res = await fetch('/api/auth/session', {
+        const res = await fetch('/auth/session', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ password: password.value })
