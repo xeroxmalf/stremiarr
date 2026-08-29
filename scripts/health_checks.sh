@@ -21,7 +21,7 @@ check_http() {
 
   # Use GET instead of --spider (HEAD) for better compatibility with FastAPI
   if [ -n "$extra" ]; then
-    if ! timeout "$TIMEOUT" wget -q -O /dev/null --tries=1 $extra "$url" 2>/dev/null; then
+    if ! timeout "$TIMEOUT" wget -q -O /dev/null --tries=1 "$extra" "$url" 2>/dev/null; then
       FAIL=$((FAIL + 1))
       FAILURES+=("$label")
       echo "FAIL: $label ($url)"

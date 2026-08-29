@@ -53,7 +53,7 @@ fi
 # We'll allow:
 #   - ${VAR} references
 #   - bcrypt-like hashes starting with $2
-if grep -E '(password|PASSWORD)' "$COMPOSE" | grep -v -E '(\$\{|\$2a|\$2b)' | grep -q -v '^#'; then
+if grep -E '(password|PASSWORD)' "$COMPOSE" | grep -v -E "(\\\$\\{|\\\$2a|\\\$2b)" | grep -q -v '^#'; then
   # If there's a password line not using env or bcrypt, that's suspect
   # But some lines legitimately include comments, so be lenient and log only if very obvious.
   # We'll treat this as a warning, not a hard fail.

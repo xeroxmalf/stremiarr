@@ -5,7 +5,7 @@
 set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-COMPOSE_FILE="$PROJECT_DIR/compose/docker-compose.yml"
+export COMPOSE_FILE="$PROJECT_DIR/compose/docker-compose.yml"
 STATS_URL="http://127.0.0.1:9944/api/stats"
 
 # Colors
@@ -53,12 +53,18 @@ draw_dashboard() {
     if [ "$(echo "$stats" | jq 'empty' 2>&1)" ]; then
         echo "  ${RED}Failed to connect to Handoff API at $STATS_URL${RESET}"
     else
-        local total=$(echo "$stats" | jq -r '.totalStreams // 0')
-        local valid=$(echo "$stats" | jq -r '.validStreams // 0')
-        local failed=$(echo "$stats" | jq -r '.failedStreams // 0')
-        local cached=$(echo "$stats" | jq -r '.cachedRequests // 0')
-        local recent=$(echo "$stats" | jq -r '.recentValidations // 0')
-        local uptime=$(echo "$stats" | jq -r '.uptime // "Unknown"')
+        local total
+        total=$(echo "$stats" | jq -r '.totalStreams // 0')
+        local valid
+        valid=$(echo "$stats" | jq -r '.validStreams // 0')
+        local failed
+        failed=$(echo "$stats" | jq -r '.failedStreams // 0')
+        local cached
+        cached=$(echo "$stats" | jq -r '.cachedRequests // 0')
+        local recent
+        recent=$(echo "$stats" | jq -r '.recentValidations // 0')
+        local uptime
+        uptime=$(echo "$stats" | jq -r '.uptime // "Unknown"')
 
         printf "  %-20s %s\n" "Total Streams:" "${CYAN}$total${RESET}"
         printf "  %-20s %s\n" "Valid Streams:" "${GREEN}$valid${RESET}"
@@ -81,7 +87,7 @@ draw_dashboard() {
 }
 
 # Trap Ctrl+C
-trap "echo -e '\n${YELLOW}Exiting dashboard...${RESET}'; exit" SIGINT
+trap 'echo -e "\n${YELLOW}Exiting dashboard...${RESET}"; exit' SIGINT
 
 # Main Loop
 while true; do

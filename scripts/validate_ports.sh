@@ -36,11 +36,17 @@ check_port() {
 # Extract ports from healthchecks and env vars
 while IFS= read -r line; do
   # Match patterns like :PORT
-  for port in $(echo "$line" | grep -oE ':\d{2,5}' | tr -d ':'); do
-    # Determine service (previous service line)
-    service=$(sed -n "/$line/,$/p" "$COMPOSE" | grep -E "^  [a-z].*:" | head -1 | awk '{print $1}' | tr -d ':')
-    [ -n "$service" ] && check_port "$port" "$service"
-  done
+  if echo "$line" | grep -qE ':\d{2,5}'; then
+    for port in $(echo "$line" | grep -oE ':\d{2,5}' | tr -d ':'); do
+      # We cannot grep the file while reading it line-by-line using < "$COMPOSE" because it is bad practice (SC2094).
+      # The line doesn't give us the service easily unless we track the current service block.
+      [ -n "$current_service" ] && check_port "$port" "$current_service"
+    done
+  fi
+  # Track current service
+  if echo "$line" | grep -qE "^  [a-z].*:"; then
+    current_service=$(echo "$line" | awk '{print $1}' | tr -d ':')
+  fi
 done < "$COMPOSE"
 
 echo "Port validation passed"
