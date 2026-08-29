@@ -13,12 +13,7 @@ linters:
     - typecheck
     - gocritic
     - gofmt
-    - lll
-  disable:
-    - exhaustive
-    - exhaustruct
-    - wrapcheck
-
+#    - lll
 issues:
   max-same-issues: 0
   exclude-rules:

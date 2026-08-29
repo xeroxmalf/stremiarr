@@ -49,8 +49,10 @@ done
 # 4) Ensure images for critical services are consistent (allow minor drift, warn only)
 check_image() {
   local svc="$1"
-  local primary_img=$(sed -n "/^  $svc:/,/^[a-z]/p" "$PRIMARY" | grep 'image:' | head -1 | awk '{print $2}' | xargs)
-  local secondary_img=$(sed -n "/^  $svc:/,/^[a-z]/p" "$SECONDARY" | grep 'image:' | head -1 | awk '{print $2}' | xargs)
+  local primary_img
+  primary_img=$(sed -n "/^  $svc:/,/^[a-z]/p" "$PRIMARY" | grep 'image:' | head -1 | awk '{print $2}' | xargs)
+  local secondary_img
+  secondary_img=$(sed -n "/^  $svc:/,/^[a-z]/p" "$SECONDARY" | grep 'image:' | head -1 | awk '{print $2}' | xargs)
 
   if [ -n "$primary_img" ] && [ -n "$secondary_img" ] && [ "$primary_img" != "$secondary_img" ]; then
     echo "WARN: Image mismatch for service '$svc': '$primary_img' vs '$secondary_img'"

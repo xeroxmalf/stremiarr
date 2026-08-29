@@ -69,8 +69,27 @@ func TrackBandwidth(bytes int, source string) {
 	bwAgg.mu.Unlock()
 }
 
+var bwStatsCache = struct {
+	mu        sync.RWMutex
+	stats     map[string]int64
+	lastFetch time.Time
+}{
+	stats: make(map[string]int64),
+}
+
 // GetBandwidthStats returns the total bandwidth consumed grouped by source.
 func GetBandwidthStats() map[string]int64 {
+	bwStatsCache.mu.RLock()
+	if !bwStatsCache.lastFetch.IsZero() && time.Since(bwStatsCache.lastFetch) < 30*time.Second {
+		statsCopy := make(map[string]int64, len(bwStatsCache.stats))
+		for k, v := range bwStatsCache.stats {
+			statsCopy[k] = v
+		}
+		bwStatsCache.mu.RUnlock()
+		return statsCopy
+	}
+	bwStatsCache.mu.RUnlock()
+
 	stats := make(map[string]int64)
 	if db == nil {
 		return stats
@@ -90,5 +109,11 @@ func GetBandwidthStats() map[string]int64 {
 			stats[source] = totalBytes
 		}
 	}
+
+	bwStatsCache.mu.Lock()
+	bwStatsCache.stats = stats
+	bwStatsCache.lastFetch = time.Now()
+	bwStatsCache.mu.Unlock()
+
 	return stats
 }
